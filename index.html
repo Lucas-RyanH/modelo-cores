@@ -90,7 +90,7 @@
                 const webcamContainer = document.getElementById("webcam-container");
                 const size = Math.min(webcamContainer.clientWidth, webcamContainer.clientHeight);
                 webcam = new tmImage.Webcam(size, size, flip);
-                await webcam.setup(); 
+                await webcam.setup({ facingMode: "environment" });  
                 await webcam.play();
                 webcamContainer.innerHTML = '';
                 webcamContainer.appendChild(webcam.canvas);
