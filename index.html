@@ -17,24 +17,18 @@
             box-sizing: border-box;
         }
         #webcam-container { 
-            width: 80vw; /* Usa porcentagem para melhor responsividade */
-            max-width: 300px; /* Limita o tamanho máximo */
-            height: 80vw; /* Mantém proporção quadrada */
+            width: 80vw;
+            max-width: 300px;
+            height: 80vw;
             max-height: 300px;
             border: 1px solid black; 
             margin-bottom: 10px; 
-            position: relative; /* Para o canvas da webcam preencher */
+            position: relative;
         }
         #webcam-container canvas {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover;
-        }
-        button {
-            padding: 10px 15px;
-            font-size: 16px;
-            margin-bottom: 15px;
-            cursor: pointer;
         }
         #label-container { 
             margin-top: 10px; 
@@ -59,12 +53,12 @@
             height: 20px;
             background-color: #e0e0e0;
             border-radius: 5px;
-            overflow: hidden; /* Garante que a barra interna não ultrapasse */
+            overflow: hidden;
         }
         .prediction-bar-inner { 
             height: 100%; 
-            background-color: #4CAF50; /* Verde */
-            width: 0%; /* Será definido pelo JavaScript */
+            background-color: #4CAF50;
+            width: 0%; 
             border-radius: 5px;
             transition: width 0.2s ease-in-out;
         }
@@ -78,20 +72,13 @@
 <body>
     <h1>Detecção de Imagem</h1>
     <div id="webcam-container"></div>
-    <button type="button" onclick="init()">Iniciar Câmera</button>
     <div id="label-container"></div>
 
     <script type="text/javascript">
-        // Certifique-se que model.json, weights.bin, e metadata.json 
-        // estão na mesma pasta que este index.html no GitHub Pages.
-        const URL = "./"; // Caminho para a pasta do modelo
-
+        const URL = "./"; // pasta do modelo no GitHub Pages
         let model, webcam, labelContainer, maxPredictions;
 
         async function init() {
-            document.querySelector("button").disabled = true; // Desabilita o botão após clicar
-            document.querySelector("button").textContent = "Carregando...";
-
             const modelURL = URL + "model.json";
             const metadataURL = URL + "metadata.json";
 
@@ -99,18 +86,17 @@
                 model = await tmImage.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
 
-                const flip = true; // Espelhar a webcam
+                const flip = true;
                 const webcamContainer = document.getElementById("webcam-container");
-                // Usar o tamanho do container para a webcam
                 const size = Math.min(webcamContainer.clientWidth, webcamContainer.clientHeight);
                 webcam = new tmImage.Webcam(size, size, flip);
                 await webcam.setup(); 
                 await webcam.play();
-                webcamContainer.innerHTML = ''; // Limpa o container antes de adicionar o canvas
+                webcamContainer.innerHTML = '';
                 webcamContainer.appendChild(webcam.canvas);
 
                 labelContainer = document.getElementById("label-container");
-                labelContainer.innerHTML = ''; // Limpa previsões antigas
+                labelContainer.innerHTML = '';
                 for (let i = 0; i < maxPredictions; i++) {
                     const div = document.createElement("div");
                     div.classList.add("prediction-bar-container");
@@ -136,13 +122,10 @@
                     labelContainer.appendChild(div);
                 }
 
-                document.querySelector("button").style.display = "none"; // Esconde o botão
                 window.requestAnimationFrame(loop);
             } catch (e) {
                 console.error(e);
-                document.querySelector("button").disabled = false;
-                document.querySelector("button").textContent = "Falha ao carregar. Tentar novamente?";
-                alert("Erro ao carregar o modelo ou a câmera: " + e.message);
+                alert("Erro ao carregar modelo ou câmera: " + e.message);
             }
         }
 
@@ -155,34 +138,33 @@
         }
 
         async function predict() {
-    const prediction = await model.predict(webcam.canvas);
-    let highestProbability = 0;
-    let predictedClass = "";
+            const prediction = await model.predict(webcam.canvas);
+            let highestProbability = 0;
+            let predictedClass = "";
 
-    for (let i = 0; i < maxPredictions; i++) {
-        // Atualiza as barras de progresso e labels como antes
-        const classPrediction = prediction[i].className; // Nome da classe do Teachable Machine
-        const probability = prediction[i].probability;
-        const probabilityPercent = (probability * 100).toFixed(0);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className;
+                const probability = prediction[i].probability;
+                const percent = (probability * 100).toFixed(0);
 
-        document.getElementById("label-" + i).innerHTML = classPrediction;
-        document.getElementById("bar-" + i).style.width = probabilityPercent + "%";
-        document.getElementById("value-" + i).innerHTML = probabilityPercent + "%";
+                document.getElementById("label-" + i).innerHTML = classPrediction;
+                document.getElementById("bar-" + i).style.width = percent + "%";
+                document.getElementById("value-" + i).innerHTML = percent + "%";
 
-        // Encontra a classe com a maior probabilidade
-        if (probability > highestProbability) {
-            highestProbability = probability;
-            predictedClass = classPrediction;
+                if (probability > highestProbability) {
+                    highestProbability = probability;
+                    predictedClass = classPrediction;
+                }
+            }
+
+            // Envia para o Thunkable se a confiança for alta
+            if (window.ReactNativeWebView && predictedClass && highestProbability > 0.70) {
+                window.ReactNativeWebView.postMessage(predictedClass.toLowerCase());
+            }
         }
-    }
 
-    // NOVO: Enviar a classe prevista para o Thunkable
-    // Verifique se está rodando dentro do Web Viewer do Thunkable e se a classe foi prevista com confiança
-    if (window.ReactNativeWebView && predictedClass && highestProbability > 0.70) { // Limiar de confiança de 70%
-        // Converte para minúsculas para padronizar
-        window.ReactNativeWebView.postMessage(predictedClass.toLowerCase()); 
-    }
-}
+        // Inicia automaticamente ao carregar a página
+        window.onload = init;
     </script>
 </body>
 </html>
