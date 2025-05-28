@@ -155,16 +155,34 @@
         }
 
         async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-            for (let i = 0; i < maxPredictions; i++) {
-                const probability = prediction[i].probability;
-                const probabilityPercent = (probability * 100).toFixed(0);
+    const prediction = await model.predict(webcam.canvas);
+    let highestProbability = 0;
+    let predictedClass = "";
 
-                document.getElementById("label-" + i).innerHTML = prediction[i].className;
-                document.getElementById("bar-" + i).style.width = probabilityPercent + "%";
-                document.getElementById("value-" + i).innerHTML = probabilityPercent + "%";
-            }
+    for (let i = 0; i < maxPredictions; i++) {
+        // Atualiza as barras de progresso e labels como antes
+        const classPrediction = prediction[i].className; // Nome da classe do Teachable Machine
+        const probability = prediction[i].probability;
+        const probabilityPercent = (probability * 100).toFixed(0);
+
+        document.getElementById("label-" + i).innerHTML = classPrediction;
+        document.getElementById("bar-" + i).style.width = probabilityPercent + "%";
+        document.getElementById("value-" + i).innerHTML = probabilityPercent + "%";
+
+        // Encontra a classe com a maior probabilidade
+        if (probability > highestProbability) {
+            highestProbability = probability;
+            predictedClass = classPrediction;
         }
+    }
+
+    // NOVO: Enviar a classe prevista para o Thunkable
+    // Verifique se está rodando dentro do Web Viewer do Thunkable e se a classe foi prevista com confiança
+    if (window.ReactNativeWebView && predictedClass && highestProbability > 0.70) { // Limiar de confiança de 70%
+        // Converte para minúsculas para padronizar
+        window.ReactNativeWebView.postMessage(predictedClass.toLowerCase()); 
+    }
+}
     </script>
 </body>
 </html>
