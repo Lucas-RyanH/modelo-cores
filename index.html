@@ -26,11 +26,11 @@
 <body>
   <h1>Detecção de Imagem</h1>
   <div id="webcam-container"></div>
-  <button onclick="init()">Iniciar Câmera</button>
+  <button onclick="init()">Iniciar Câmera Traseira</button>
   <div id="label-container"></div>
 
   <script type="text/javascript">
-    const URL = "https://lucas-ryanh.github.io/modelo/"; // Substitua pelo seu caminho do modelo
+    const URL = "https://lucas-ryanh.github.io/modelo/";
 
     let model, webcam, labelContainer, maxPredictions;
 
@@ -41,14 +41,35 @@
       try {
         const modelURL = URL + "model.json";
         const metadataURL = URL + "metadata.json";
-
         model = await tmImage.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
 
-        const flip = true;
+        // Tenta encontrar a câmera traseira pela lista de devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === "videoinput");
+        let rearCameraId = null;
+
+        for (let device of videoDevices) {
+          if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("traseira")) {
+            rearCameraId = device.deviceId;
+            break;
+          }
+        }
+
+        const flip = false;
         const size = 300;
         webcam = new tmImage.Webcam(size, size, flip);
-        await webcam.setup({ facingMode: "environment" }); // Força a câmera traseira
+
+        if (rearCameraId) {
+          await webcam.setup({
+            deviceId: rearCameraId
+          });
+        } else {
+          await webcam.setup({
+            facingMode: { exact: "environment" }
+          });
+        }
+
         await webcam.play();
 
         document.getElementById("webcam-container").innerHTML = '';
@@ -61,13 +82,12 @@
         }
 
         document.querySelector("button").style.display = "none";
-
         window.requestAnimationFrame(loop);
       } catch (e) {
         alert("Erro ao carregar modelo ou câmera: " + e.message);
-        document.querySelector("button").disabled = false;
-        document.querySelector("button").textContent = "Tentar novamente";
         console.error(e);
+        document.querySelector("button").disabled = false;
+        document.querySelector("button").textContent = "Tentar Novamente";
       }
     }
 
