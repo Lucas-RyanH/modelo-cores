@@ -1,111 +1,101 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Detecção de Imagem</title>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
-  <style>
-    body {
-      text-align: center;
-      font-family: sans-serif;
-      background-color: #333;
-      color: white;
-    }
-    button {
-      font-size: 20px;
-      margin-top: 20px;
-      padding: 10px 20px;
-    }
-    canvas {
-      margin-top: 20px;
-      border: 2px solid white;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Cor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; }
+        .container { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; }
+        #startButton { width: 90%; height: 80%; font-size: 24px; cursor: pointer; }
+        #webcam-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; /* Esconde a câmera atrás */}
+        #webcam-container canvas { width: 100%; height: 100%; object-fit: cover; }
+    </style>
 </head>
 <body>
-  <h1>Detecção de Imagem</h1>
-  <div id="webcam-container"></div>
-  <button onclick="init()">Iniciar Câmera Traseira</button>
-  <div id="label-container"></div>
+    <div id="mainContainer" class="container">
+        <button id="startButton" onclick="init()">Toque para Iniciar o Scanner</button>
+    </div>
+    <div id="webcam-container"></div>
 
-  <script type="text/javascript">
-    const URL = "https://lucas-ryanh.github.io/modelo/";
+    <script type="text/javascript">
+        const URL = "./";
+        let model, webcam;
+        let targetColor = "";
+        let lastDetectedColor = "";
 
-    let model, webcam, labelContainer, maxPredictions;
-
-    async function init() {
-      document.querySelector("button").disabled = true;
-      document.querySelector("button").textContent = "Carregando...";
-
-      try {
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
-
-        // Tenta encontrar a câmera traseira pela lista de devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === "videoinput");
-        let rearCameraId = null;
-
-        for (let device of videoDevices) {
-          if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("traseira")) {
-            rearCameraId = device.deviceId;
-            break;
-          }
+        // Thunkable chama esta função para definir a cor alvo
+        function setTargetColor(color) {
+            targetColor = color.toLowerCase();
+            lastDetectedColor = ""; // Reseta para permitir novo beep
         }
 
-        const flip = false;
-        const size = 300;
-        webcam = new tmImage.Webcam(size, size, flip);
+        async function init() {
+            const startButton = document.getElementById('startButton');
+            startButton.innerHTML = "Carregando...";
+            startButton.disabled = true;
 
-        if (rearCameraId) {
-          await webcam.setup({
-            deviceId: rearCameraId
-          });
-        } else {
-          await webcam.setup({
-            facingMode: { exact: "environment" }
-          });
+            try {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+                [model, webcam] = await Promise.all([
+                    tmImage.load(modelURL, metadataURL),
+                    new tmImage.Webcam(400, 400, true) // largura, altura, espelhar
+                ]);
+
+                await webcam.setup();
+                await webcam.play();
+                document.getElementById('webcam-container').appendChild(webcam.canvas);
+                
+                // Esconde o botão e o container inicial
+                document.getElementById('mainContainer').style.display = 'none';
+
+                // AVISA O THUNKABLE QUE A CÂMERA ESTÁ PRONTA!
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage("camera_pronta");
+                }
+
+                window.requestAnimationFrame(loop);
+            } catch (e) {
+                console.error(e);
+                startButton.innerHTML = "Erro ao iniciar. Tente novamente.";
+                startButton.disabled = false;
+            }
         }
 
-        await webcam.play();
-
-        document.getElementById("webcam-container").innerHTML = '';
-        document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-        labelContainer = document.getElementById("label-container");
-        labelContainer.innerHTML = "";
-        for (let i = 0; i < maxPredictions; i++) {
-          labelContainer.appendChild(document.createElement("div"));
+        async function loop() {
+            if (webcam && webcam.canvas) {
+                webcam.update();
+                await predict();
+                window.requestAnimationFrame(loop);
+            }
         }
 
-        document.querySelector("button").style.display = "none";
-        window.requestAnimationFrame(loop);
-      } catch (e) {
-        alert("Erro ao carregar modelo ou câmera: " + e.message);
-        console.error(e);
-        document.querySelector("button").disabled = false;
-        document.querySelector("button").textContent = "Tentar Novamente";
-      }
-    }
+        async function predict() {
+            if (!model || !targetColor) return;
+            const prediction = await model.predict(webcam.canvas);
+            let highestProbability = 0;
+            let predictedClass = "";
 
-    async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
+            for (let i = 0; i < prediction.length; i++) {
+                if (prediction[i].probability > highestProbability) {
+                    highestProbability = prediction[i].probability;
+                    predictedClass = prediction[i].className;
+                }
+            }
 
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-      for (let i = 0; i < maxPredictions; i++) {
-        const classPrediction = `${prediction[i].className}: ${(
-          prediction[i].probability * 100
-        ).toFixed(2)}%`;
-        labelContainer.childNodes[i].innerHTML = classPrediction;
-      }
-    }
-  </script>
+            if (predictedClass && highestProbability > 0.80) {
+                const currentDetected = predictedClass.toLowerCase();
+                if (currentDetected === targetColor && lastDetectedColor !== targetColor) {
+                    if (window.ReactNativeWebView) {
+                        window.ReactNativeWebView.postMessage("beep");
+                    }
+                }
+                lastDetectedColor = currentDetected;
+            }
+        }
+    </script>
 </body>
 </html>
