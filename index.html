@@ -1,34 +1,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-    </head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Cor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; }
+        #mainContainer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; background-color: white; }
+        #startButton { width: 90%; height: 80%; font-size: 24px; cursor: pointer; border: 2px solid black; border-radius: 10px; }
+        #webcam-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        #webcam-container canvas { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
 <body>
+    <div id="mainContainer">
+        <button id="startButton" onclick="init()">Toque para Iniciar o Scanner</button>
+    </div>
+    <div id="webcam-container"></div>
+
     <script type="text/javascript">
-        const URL = "./"; // Certifique-se que seus arquivos model.json e metadata.json estão na mesma pasta do index.html ou ajuste o caminho
+        const URL = "./";
         let model, webcam;
-        let jsAppTargetColor = ""; // Renomeei para evitar confusão com a variável global targetColor se houver
-        let jsLastDetectedForBeep = ""; // Renomeei para clareza
+        let targetColor = "";
+        let lastDetectedColor = "";
 
         // Thunkable chama esta função para definir a cor alvo
-        // Esta função já está no seu código e está boa!
-        function setTargetColorFunction(color) { // Renomeei para evitar conflito com nome de variável global, se houver
-            jsAppTargetColor = color.toLowerCase();
-            jsLastDetectedForBeep = ""; // Reseta para permitir novo beep
-            console.log("JS: Cor alvo definida para: " + jsAppTargetColor);
+        function setTargetColor(color) {
+            targetColor = color.toLowerCase();
+            lastDetectedColor = ""; // Reseta para permitir novo beep
         }
-
-        // !!!!! ADICIONE ESTE BLOCO !!!!!
-        // Ouvinte para mensagens vindas do Thunkable
-        window.addEventListener('message', function(event) {
-            const messageFromThunkable = event.data;
-            console.log("JS: Mensagem recebida do Thunkable: " + messageFromThunkable);
-
-            if (typeof messageFromThunkable === 'string' && messageFromThunkable.startsWith('setTargetColor:')) {
-                const colorName = messageFromThunkable.substring('setTargetColor:'.length);
-                setTargetColorFunction(colorName); // Chama a função para definir a cor
-            }
-        });
-        // !!!!! FIM DO BLOCO A ADICIONAR !!!!!
 
         async function init() {
             const startButton = document.getElementById('startButton');
@@ -40,7 +42,7 @@
                 const metadataURL = URL + "metadata.json";
                 [model, webcam] = await Promise.all([
                     tmImage.load(modelURL, metadataURL),
-                    new tmImage.Webcam(400, 400, true)
+                    new tmImage.Webcam(400, 400, true) // largura, altura, espelhar
                 ]);
 
                 await webcam.setup();
@@ -51,34 +53,25 @@
 
                 if (window.ReactNativeWebView) {
                     window.ReactNativeWebView.postMessage("camera_pronta");
-                    console.log("JS: Enviado 'camera_pronta'");
                 }
-
                 window.requestAnimationFrame(loop);
             } catch (e) {
-                console.error("JS: Erro no init:", e);
+                console.error(e);
                 startButton.innerHTML = "Erro ao iniciar. Tente novamente.";
                 startButton.disabled = false;
             }
         }
 
         async function loop() {
-            if (webcam && webcam.canvas && webcam.canvas.readyState !== 4) { // Adicionado webcam.canvas.readyState !== 4 para verificar se o canvas está pronto
+            if (webcam && webcam.canvas) {
                 webcam.update();
                 await predict();
                 window.requestAnimationFrame(loop);
-            } else if (webcam && webcam.canvas && webcam.canvas.readyState === 4) {
-                console.log("JS: Canvas não está pronto, tentando novamente no próximo frame.");
-                window.requestAnimationFrame(loop); // Tenta novamente se não estiver pronto
             }
         }
 
         async function predict() {
-            // Renomeado para jsAppTargetColor e jsLastDetectedForBeep para consistência
-            if (!model || !webcam || !webcam.canvas || !jsAppTargetColor) { // Adicionado !webcam e !webcam.canvas
-                 //console.log("JS: Predict pulado: modelo, webcam, canvas ou cor alvo não prontos.");
-                 return;
-            }
+            if (!model || !targetColor) return;
             const prediction = await model.predict(webcam.canvas);
             let highestProbability = 0;
             let predictedClass = "";
@@ -90,15 +83,14 @@
                 }
             }
 
-            if (predictedClass && highestProbability > 0.80) { // Limiar de confiança
+            if (predictedClass && highestProbability > 0.80) {
                 const currentDetected = predictedClass.toLowerCase();
-                if (currentDetected === jsAppTargetColor && jsLastDetectedForBeep !== jsAppTargetColor) {
+                if (currentDetected === targetColor && lastDetectedColor !== targetColor) {
                     if (window.ReactNativeWebView) {
                         window.ReactNativeWebView.postMessage("beep");
-                        console.log("JS: Enviado 'beep' para cor: " + currentDetected);
                     }
                 }
-                jsLastDetectedForBeep = currentDetected;
+                lastDetectedColor = currentDetected;
             }
         }
     </script>
