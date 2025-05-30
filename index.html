@@ -30,24 +30,19 @@
         function setTargetColor(color) {
             targetColor = color.toLowerCase();
             lastDetectedColor = ""; 
-            console.log("Cor alvo definida para: " + targetColor);
         }
 
-        // !!!!! A MUDANÇA ESTÁ AQUI !!!!!
-        // Este é o "ouvinte" que recebe as mensagens do Thunkable
+        // "Ouvinte" que recebe as mensagens do Thunkable
         window.addEventListener("message", function(event) {
             const message = event.data;
-            // Verifica se a mensagem tem o formato que esperamos
             if (typeof message === 'string' && message.startsWith('setTargetColor:')) {
-                // Extrai o nome da cor da mensagem
                 const colorName = message.substring('setTargetColor:'.length);
-                // Chama a função para definir a cor
                 setTargetColor(colorName);
             }
         });
 
+        // Função de inicialização com a câmera traseira
         async function init() {
-            // (O resto do código init, loop e predict continua EXATAMENTE IGUAL ao da versão anterior)
             const startButton = document.getElementById('startButton');
             startButton.innerHTML = "Carregando...";
             startButton.disabled = true;
@@ -55,12 +50,18 @@
             try {
                 const modelURL = URL + "model.json";
                 const metadataURL = URL + "metadata.json";
-                [model, webcam] = await Promise.all([
-                    tmImage.load(modelURL, metadataURL),
-                    new tmImage.Webcam(400, 400, true)
-                ]);
+                
+                // O parâmetro 'flip' (espelhar) deve ser false para a câmera traseira
+                webcam = new tmImage.Webcam(400, 400, false); 
+                
+                // Pedimos explicitamente pela câmera traseira ('environment')
+                const constraints = {
+                    video: {
+                        facingMode: 'environment' 
+                    }
+                };
+                await webcam.setup(constraints);
 
-                await webcam.setup();
                 await webcam.play();
                 document.getElementById('webcam-container').appendChild(webcam.canvas);
                 
@@ -72,7 +73,11 @@
                 window.requestAnimationFrame(loop);
             } catch (e) {
                 console.error(e);
-                startButton.innerHTML = "Erro ao iniciar. Tente novamente.";
+                if (e.name === "NotAllowedError" || e.name === "OverconstrainedError") {
+                    startButton.innerHTML = "Erro de câmera. Verifique permissões ou se há câmera traseira.";
+                } else {
+                    startButton.innerHTML = "Erro ao iniciar. Tente novamente.";
+                }
                 startButton.disabled = false;
             }
         }
