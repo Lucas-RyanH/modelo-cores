@@ -9,6 +9,7 @@
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; }
         #mainContainer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; background-color: white; }
+        #status { font-size: 20px; padding: 20px; }
         #startButton { width: 90%; height: 80%; font-size: 24px; cursor: pointer; border: 2px solid black; border-radius: 10px; }
         #webcam-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
         #webcam-container canvas { width: 100%; height: 100%; object-fit: cover; }
@@ -18,70 +19,96 @@
     <div id="mainContainer">
         <button id="startButton" onclick="init()">Toque para Iniciar o Scanner</button>
     </div>
-    <div id="webcam-container"></div>
+    <div id="status" style="display: none;"></div> <div id="webcam-container"></div>
 
     <script type="text/javascript">
-        const URL = "./";
+        const URL = "./"; // Certifique-se que model.json, etc. estão na mesma pasta
         let model, webcam;
         let targetColor = "";
         let lastDetectedColor = "";
 
-        // Função interna que define a cor alvo
+        // Função interna do JavaScript que define a cor alvo
         function setTargetColor(color) {
             targetColor = color.toLowerCase();
             lastDetectedColor = ""; 
+            const statusDiv = document.getElementById('status');
+            if (statusDiv) statusDiv.innerHTML = "Procurando por: <b>" + targetColor + "</b>";
         }
 
-        // "Ouvinte" que recebe as mensagens do Thunkable
+        // Função de Reconhecimento de Voz (Web Speech API)
+        function startVoiceRecognition() {
+            const statusDiv = document.getElementById('status');
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                if (statusDiv) statusDiv.innerHTML = "Erro: Voz não suportada.";
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:voz_nao_suportada");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR'; // Linguagem Português do Brasil
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.start();
+
+            if (statusDiv) statusDiv.innerHTML = "Ouvindo...";
+
+            recognition.onresult = (event) => {
+                const speechResult = event.results[0][0].transcript;
+                setTargetColor(speechResult); // Define a cor alvo com o resultado da voz
+            };
+
+            recognition.onerror = (event) => {
+                if (statusDiv) statusDiv.innerHTML = "Erro na voz: " + event.error;
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:" + event.error);
+            };
+
+            recognition.onspeechend = () => {
+                recognition.stop();
+            };
+        }
+        
+        // "Ouvinte" que recebe comandos do Thunkable
         window.addEventListener("message", function(event) {
             const message = event.data;
-            if (typeof message === 'string' && message.startsWith('setTargetColor:')) {
-                const colorName = message.substring('setTargetColor:'.length);
-                setTargetColor(colorName);
+            if (typeof message === 'string' && message === 'command:startVoiceRecognition') {
+                startVoiceRecognition(); // Chama a função de voz no HTML
             }
         });
 
-        // Função de inicialização com a câmera traseira
+        // Função de inicialização da câmera
         async function init() {
             const startButton = document.getElementById('startButton');
-            startButton.innerHTML = "Carregando...";
-            startButton.disabled = true;
+            const statusDiv = document.getElementById('status');
+            
+            startButton.style.display = 'none'; 
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = "Carregando câmera...";
+            }
 
             try {
                 const modelURL = URL + "model.json";
                 const metadataURL = URL + "metadata.json";
                 
-                // O parâmetro 'flip' (espelhar) deve ser false para a câmera traseira
-                webcam = new tmImage.Webcam(400, 400, false); 
-                
-                // Pedimos explicitamente pela câmera traseira ('environment')
-                const constraints = {
-                    video: {
-                        facingMode: 'environment' 
-                    }
-                };
-                await webcam.setup(constraints);
-
+                webcam = new tmImage.Webcam(400, 400, false); // flip = false para câmera traseira
+                await webcam.setup({ video: { facingMode: 'environment' } }); // Força câmera traseira
                 await webcam.play();
                 document.getElementById('webcam-container').appendChild(webcam.canvas);
                 
-                document.getElementById('mainContainer').style.display = 'none';
-
                 if (window.ReactNativeWebView) {
                     window.ReactNativeWebView.postMessage("camera_pronta");
                 }
                 window.requestAnimationFrame(loop);
             } catch (e) {
-                console.error(e);
-                if (e.name === "NotAllowedError" || e.name === "OverconstrainedError") {
-                    startButton.innerHTML = "Erro de câmera. Verifique permissões ou se há câmera traseira.";
-                } else {
-                    startButton.innerHTML = "Erro ao iniciar. Tente novamente.";
-                }
-                startButton.disabled = false;
+                if (statusDiv) statusDiv.innerHTML = "Erro ao iniciar câmera. Verifique as permissões.";
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou");
             }
         }
 
+        // Loop de predição (igual às versões anteriores)
         async function loop() {
             if (webcam && webcam.canvas) {
                 webcam.update();
@@ -91,7 +118,7 @@
         }
 
         async function predict() {
-            if (!model || !targetColor) return;
+            if (!model || !targetColor) return; // Se o modelo não carregou ou não há cor alvo, não faz nada
             const prediction = await model.predict(webcam.canvas);
             let highestProbability = 0;
             let predictedClass = "";
@@ -103,7 +130,7 @@
                 }
             }
 
-            if (predictedClass && highestProbability > 0.80) {
+            if (predictedClass && highestProbability > 0.80) { // Limiar de confiança
                 const currentDetected = predictedClass.toLowerCase();
                 if (currentDetected === targetColor && lastDetectedColor !== targetColor) {
                     if (window.ReactNativeWebView) {
