@@ -2,142 +2,41 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner de Cor</title>
+    <title>Teste de Depuração 1</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; }
-        #mainContainer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; background-color: white; }
-        #status { font-size: 20px; padding: 20px; }
-        #startButton { width: 90%; height: 80%; font-size: 24px; cursor: pointer; border: 2px solid black; border-radius: 10px; }
-        #webcam-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-        #webcam-container canvas { width: 100%; height: 100%; object-fit: cover; }
+        body { font-family: sans-serif; font-size: 24px; text-align: center; padding-top: 50px; }
     </style>
 </head>
 <body>
-    <div id="mainContainer">
-        <button id="startButton" onclick="init()">Toque para Iniciar o Scanner</button>
-    </div>
-    <div id="status" style="display: none;"></div> <div id="webcam-container"></div>
+    <button onclick="iniciarTeste()">Iniciar Teste de Carregamento</button>
+    <div id="status"></div>
 
     <script type="text/javascript">
-        const URL = "./"; // Certifique-se que model.json, etc. estão na mesma pasta
-        let model, webcam;
-        let targetColor = "";
-        let lastDetectedColor = "";
-
-        // Função interna do JavaScript que define a cor alvo
-        function setTargetColor(color) {
-            targetColor = color.toLowerCase();
-            lastDetectedColor = ""; 
-            const statusDiv = document.getElementById('status');
-            if (statusDiv) statusDiv.innerHTML = "Procurando por: <b>" + targetColor + "</b>";
-        }
-
-        // Função de Reconhecimento de Voz (Web Speech API)
-        function startVoiceRecognition() {
-            const statusDiv = document.getElementById('status');
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
-            if (!SpeechRecognition) {
-                if (statusDiv) statusDiv.innerHTML = "Erro: Voz não suportada.";
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:voz_nao_suportada");
-                return;
-            }
-
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'pt-BR'; // Linguagem Português do Brasil
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-
-            recognition.start();
-
-            if (statusDiv) statusDiv.innerHTML = "Ouvindo...";
-
-            recognition.onresult = (event) => {
-                const speechResult = event.results[0][0].transcript;
-                setTargetColor(speechResult); // Define a cor alvo com o resultado da voz
-            };
-
-            recognition.onerror = (event) => {
-                if (statusDiv) statusDiv.innerHTML = "Erro na voz: " + event.error;
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:" + event.error);
-            };
-
-            recognition.onspeechend = () => {
-                recognition.stop();
-            };
-        }
+        const URL = "./";
         
-        // "Ouvinte" que recebe comandos do Thunkable
-        window.addEventListener("message", function(event) {
-            const message = event.data;
-            if (typeof message === 'string' && message === 'command:startVoiceRecognition') {
-                startVoiceRecognition(); // Chama a função de voz no HTML
-            }
-        });
-
-        // Função de inicialização da câmera
-        async function init() {
-            const startButton = document.getElementById('startButton');
+        async function iniciarTeste() {
             const statusDiv = document.getElementById('status');
-            
-            startButton.style.display = 'none'; 
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-                statusDiv.innerHTML = "Carregando câmera...";
-            }
+            statusDiv.innerHTML = "Iniciando teste...";
+            console.log("TESTE: Clicou no botão.");
 
             try {
                 const modelURL = URL + "model.json";
                 const metadataURL = URL + "metadata.json";
-                
-                webcam = new tmImage.Webcam(400, 400, false); // flip = false para câmera traseira
-                await webcam.setup({ video: { facingMode: 'environment' } }); // Força câmera traseira
-                await webcam.play();
-                document.getElementById('webcam-container').appendChild(webcam.canvas);
-                
-                if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage("camera_pronta");
-                }
-                window.requestAnimationFrame(loop);
+
+                console.log("TESTE: Antes de carregar o modelo...");
+                statusDiv.innerHTML = "Tentando carregar o modelo...";
+
+                // Vamos testar APENAS o carregamento do modelo.
+                const model = await tmImage.load(modelURL, metadataURL);
+
+                console.log("TESTE: Modelo carregado com sucesso!");
+                statusDiv.innerHTML = "SUCESSO! O modelo foi carregado corretamente.";
+
             } catch (e) {
-                if (statusDiv) statusDiv.innerHTML = "Erro ao iniciar câmera. Verifique as permissões.";
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou");
-            }
-        }
-
-        // Loop de predição (igual às versões anteriores)
-        async function loop() {
-            if (webcam && webcam.canvas) {
-                webcam.update();
-                await predict();
-                window.requestAnimationFrame(loop);
-            }
-        }
-
-        async function predict() {
-            if (!model || !targetColor) return; // Se o modelo não carregou ou não há cor alvo, não faz nada
-            const prediction = await model.predict(webcam.canvas);
-            let highestProbability = 0;
-            let predictedClass = "";
-
-            for (let i = 0; i < prediction.length; i++) {
-                if (prediction[i].probability > highestProbability) {
-                    highestProbability = prediction[i].probability;
-                    predictedClass = prediction[i].className;
-                }
-            }
-
-            if (predictedClass && highestProbability > 0.80) { // Limiar de confiança
-                const currentDetected = predictedClass.toLowerCase();
-                if (currentDetected === targetColor && lastDetectedColor !== targetColor) {
-                    if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage("beep");
-                    }
-                }
-                lastDetectedColor = currentDetected;
+                console.error("TESTE: Ocorreu um erro ao carregar o modelo:", e);
+                statusDiv.innerHTML = "FALHA! Ocorreu um erro ao carregar o modelo. Verifique o console.";
             }
         }
     </script>
