@@ -8,6 +8,7 @@
         body { margin: 0; padding: 0; background-color: #000; }
         video { width: 100vw; height: 100vh; object-fit: cover; }
         .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid white; transform: translate(-50%, -50%); mix-blend-mode: difference; }
+        /* Removi o statusDiv para simplificar, já que a câmera preta é o problema principal */
     </style>
 </head>
 <body>
@@ -20,41 +21,15 @@
         const canvas = document.querySelector('canvas');
         const context = canvas.getContext('2d', { willReadFrequently: true });
         let lastColorSent = '';
+        let cameraInitialized = false; // Flag para controlar a inicialização
 
-        // ##### FUNÇÃO DE COR ATUALIZADA #####
-        function rgbToColorName(r, g, b) {
-            // Lógica para Preto, Branco e Cinza
-            if (r < 35 && g < 35 && b < 35) return "preto";
-            if (r > 220 && g > 220 && b > 220) return "branco";
-            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";
-
-            // Lógica para as outras cores
-            let hsv = rgbToHsv(r, g, b);
-            let h = hsv[0], s = hsv[1], v = hsv[2];
-
-            if (s < 0.25) return "bege"; // Saturação baixa pode ser bege ou cinza claro
-
-            if (h < 15 || h >= 345) return "vermelho";
-            if (h >= 15 && h < 45) return "laranja";
-            if (h >= 45 && h < 70) return "amarelo";
-            if (h >= 70 && h < 160) return "verde";
-            if (h >= 160 && h < 260) return "azul";
-            if (h >= 260 && h < 300) return "roxo";
-            if (h >= 300 && h < 345) return "rosa"; // Inclui magenta
-
-            return ""; // Nenhuma cor clara encontrada
-        }
-
-        // Função auxiliar para converter RGB para HSV (Matiz, Saturação, Valor) - ajuda a identificar cores
-        function rgbToHsv(r, g, b) {
+        function rgbToHsv(r, g, b) { // Mantive sua função rgbToHsv
             r /= 255, g /= 255, b /= 255;
             let max = Math.max(r, g, b), min = Math.min(r, g, b);
             let h, s, v = max;
             let d = max - min;
             s = max === 0 ? 0 : d / max;
-            if (max === min) {
-                h = 0; // achromatic
-            } else {
+            if (max === min) { h = 0; } else {
                 switch (max) {
                     case r: h = (g - b) / d + (g < b ? 6 : 0); break;
                     case g: h = (b - r) / d + 2; break;
@@ -65,8 +40,28 @@
             return [h * 360, s, v];
         }
 
-        // O resto do código continua o mesmo
+        function rgbToColorName(r, g, b) { // Mantive sua função rgbToColorName
+            if (r < 35 && g < 35 && b < 35) return "preto";
+            if (r > 220 && g > 220 && b > 220) return "branco";
+            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";
+            let hsv = rgbToHsv(r, g, b);
+            let h = hsv[0], s = hsv[1];
+            if (s < 0.25) return "bege";
+            if (h < 15 || h >= 345) return "vermelho";
+            if (h >= 15 && h < 45) return "laranja";
+            if (h >= 45 && h < 70) return "amarelo";
+            if (h >= 70 && h < 160) return "verde";
+            if (h >= 160 && h < 260) return "azul";
+            if (h >= 260 && h < 300) return "roxo";
+            if (h >= 300 && h < 345) return "rosa";
+            return "";
+        }
+
         async function startCamera() {
+            if (cameraInitialized) return; // Previne múltiplas inicializações
+            cameraInitialized = true;
+            console.log("JS: startCamera() chamada.");
+
             const constraints = { video: { facingMode: 'environment' } };
             try {
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -75,10 +70,12 @@
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("camera_pronta");
+                    console.log("JS: Câmera pronta e mensagem enviada.");
                     requestAnimationFrame(detectColorLoop);
                 };
             } catch (err) {
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou");
+                console.error("JS: Erro ao iniciar a câmera: ", err);
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou - " + err.message);
             }
         }
 
@@ -86,14 +83,22 @@
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             const pixelData = context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
             const colorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
-            if (colorName && colorName !== lastColorSent) {
+            if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
                 lastColorSent = colorName;
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("color:" + colorName);
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage("color:" + colorName);
+                }
             }
             requestAnimationFrame(detectColorLoop);
         }
 
-        startCamera();
+        // EventListener para comandos do Thunkable
+        window.addEventListener("message", (event) => {
+            console.log("JS: Mensagem recebida do Thunkable: " + event.data);
+            if (event.data === 'command:initializeCamera') {
+                startCamera(); // Thunkable agora comanda o início da câmera
+            }
+        });
     </script>
 </body>
 </html>
