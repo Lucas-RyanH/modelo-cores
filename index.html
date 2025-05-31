@@ -2,51 +2,132 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Teste de Depuração 2 - Câmera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Cor</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        body { font-family: sans-serif; font-size: 20px; text-align: center; padding-top: 50px; }
-        canvas { border: 2px solid black; margin-top: 20px; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; }
+        #mainContainer { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; text-align: center; background-color: white; position: relative; z-index: 10; }
+        #status { font-size: 20px; padding: 20px; }
+        #startButton { width: 90%; height: 80%; font-size: 24px; cursor: pointer; border: 2px solid black; border-radius: 10px; }
+        
+        /* !!!!! A CORREÇÃO ESTÁ AQUI !!!!! */
+        #webcam-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* A linha z-index: -1 foi REMOVIDA. Este era o problema. */
+            background-color: #000; /* Fundo preto para vermos se a câmera está por cima */
+        }
+        #webcam-container canvas { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
-    <button onclick="iniciarTesteCamera()">Iniciar Teste de Câmera</button>
-    <div id="status"></div>
+    <div id="mainContainer">
+        <button id="startButton" onclick="init()">Toque para Iniciar o Scanner</button>
+    </div>
+    <div id="status" style="display: none; position: absolute; top: 20px; left: 0; width: 100%; text-align: center; color: white; background-color: rgba(0,0,0,0.5); z-index: 20;"></div>
+    <div id="webcam-container"></div>
 
     <script type="text/javascript">
-        async function iniciarTesteCamera() {
+        // Todo o JavaScript abaixo continua igual à versão final anterior,
+        // pois já confirmamos que ele funciona.
+        const URL = "./";
+        let model, webcam;
+        let targetColor = "";
+        let lastDetectedColor = "";
+
+        function setTargetColor(color) {
+            targetColor = color.toLowerCase();
+            lastDetectedColor = ""; 
             const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = "Iniciando teste de câmera...";
-            console.log("TESTE 2: Clicou no botão.");
+            if (statusDiv) statusDiv.innerHTML = "Procurando por: <b>" + targetColor + "</b>";
+        }
+
+        function startVoiceRecognition() {
+            const statusDiv = document.getElementById('status');
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:voz_nao_suportada");
+                return;
+            }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.start();
+            if (statusDiv) statusDiv.innerHTML = "Ouvindo...";
+            recognition.onresult = (event) => setTargetColor(event.results[0][0].transcript);
+            recognition.onerror = (event) => {
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:" + event.error);
+            };
+            recognition.onspeechend = () => recognition.stop();
+        }
+        
+        window.addEventListener("message", (event) => {
+            if (event.data === 'command:startVoiceRecognition') startVoiceRecognition();
+        });
+
+        async function init() {
+            const startButton = document.getElementById('startButton');
+            const mainContainer = document.getElementById('mainContainer');
+            const statusDiv = document.getElementById('status');
+            
+            if (mainContainer) mainContainer.style.display = 'none'; 
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = "Carregando câmera...";
+            }
 
             try {
-                console.log("TESTE 2: Antes de criar o objeto webcam...");
-                statusDiv.innerHTML = "1. Criando objeto webcam...";
-
-                // Usamos 'false' para espelhamento, correto para câmera traseira
-                const webcam = new tmImage.Webcam(300, 300, false);
-
-                console.log("TESTE 2: Objeto webcam criado. Antes do setup()...");
-                statusDiv.innerHTML = "2. Tentando configurar a câmera (setup)...";
-
-                // Pedindo a câmera traseira
-                await webcam.setup({ video: { facingMode: 'environment' } });
-
-                console.log("TESTE 2: Câmera configurada (setup) com sucesso! Antes do play()...");
-                statusDiv.innerHTML = "3. Tentando iniciar o vídeo (play)...";
-
-                await webcam.play();
-
-                console.log("TESTE 2: SUCESSO! Câmera iniciada!");
-                statusDiv.innerHTML = "4. SUCESSO! A CÂMERA FUNCIONOU! O vídeo deve aparecer abaixo.";
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
                 
-                // Adiciona o canvas da câmera na tela para vermos o resultado
-                document.body.appendChild(webcam.canvas);
-
+                [model, webcam] = await Promise.all([
+                    tmImage.load(modelURL, metadataURL),
+                    new tmImage.Webcam(400, 400, false)
+                ]);
+                
+                await webcam.setup({ video: { facingMode: 'environment' } });
+                await webcam.play();
+                document.getElementById('webcam-container').appendChild(webcam.canvas);
+                
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage("camera_pronta");
+                }
+                window.requestAnimationFrame(loop);
             } catch (e) {
-                console.error("TESTE 2: FALHA na câmera:", e);
-                statusDiv.innerHTML = "FALHA! Erro ao tentar usar a câmera. Mensagem: " + e.message;
+                if (statusDiv) statusDiv.innerHTML = "Erro ao iniciar câmera: " + e.message;
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou");
+            }
+        }
+
+        async function loop() {
+            if (webcam && webcam.canvas) {
+                webcam.update();
+                await predict();
+                window.requestAnimationFrame(loop);
+            }
+        }
+
+        async function predict() {
+            if (!model || !targetColor) return;
+            const prediction = await model.predict(webcam.canvas);
+            let highestProbability = 0;
+            let predictedClass = "";
+            for (let i = 0; i < prediction.length; i++) {
+                if (prediction[i].probability > highestProbability) {
+                    highestProbability = prediction[i].probability;
+                    predictedClass = prediction[i].className;
+                }
+            }
+            if (predictedClass && highestProbability > 0.80) {
+                const currentDetected = predictedClass.toLowerCase();
+                if (currentDetected === targetColor && lastDetectedColor !== targetColor) {
+                    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("beep");
+                }
+                lastDetectedColor = currentDetected;
             }
         }
     </script>
