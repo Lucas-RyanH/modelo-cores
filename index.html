@@ -2,41 +2,51 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Teste de Depuração 1</title>
+    <title>Teste de Depuração 2 - Câmera</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        body { font-family: sans-serif; font-size: 24px; text-align: center; padding-top: 50px; }
+        body { font-family: sans-serif; font-size: 20px; text-align: center; padding-top: 50px; }
+        canvas { border: 2px solid black; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <button onclick="iniciarTeste()">Iniciar Teste de Carregamento</button>
+    <button onclick="iniciarTesteCamera()">Iniciar Teste de Câmera</button>
     <div id="status"></div>
 
     <script type="text/javascript">
-        const URL = "./";
-        
-        async function iniciarTeste() {
+        async function iniciarTesteCamera() {
             const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = "Iniciando teste...";
-            console.log("TESTE: Clicou no botão.");
+            statusDiv.innerHTML = "Iniciando teste de câmera...";
+            console.log("TESTE 2: Clicou no botão.");
 
             try {
-                const modelURL = URL + "model.json";
-                const metadataURL = URL + "metadata.json";
+                console.log("TESTE 2: Antes de criar o objeto webcam...");
+                statusDiv.innerHTML = "1. Criando objeto webcam...";
 
-                console.log("TESTE: Antes de carregar o modelo...");
-                statusDiv.innerHTML = "Tentando carregar o modelo...";
+                // Usamos 'false' para espelhamento, correto para câmera traseira
+                const webcam = new tmImage.Webcam(300, 300, false);
 
-                // Vamos testar APENAS o carregamento do modelo.
-                const model = await tmImage.load(modelURL, metadataURL);
+                console.log("TESTE 2: Objeto webcam criado. Antes do setup()...");
+                statusDiv.innerHTML = "2. Tentando configurar a câmera (setup)...";
 
-                console.log("TESTE: Modelo carregado com sucesso!");
-                statusDiv.innerHTML = "SUCESSO! O modelo foi carregado corretamente.";
+                // Pedindo a câmera traseira
+                await webcam.setup({ video: { facingMode: 'environment' } });
+
+                console.log("TESTE 2: Câmera configurada (setup) com sucesso! Antes do play()...");
+                statusDiv.innerHTML = "3. Tentando iniciar o vídeo (play)...";
+
+                await webcam.play();
+
+                console.log("TESTE 2: SUCESSO! Câmera iniciada!");
+                statusDiv.innerHTML = "4. SUCESSO! A CÂMERA FUNCIONOU! O vídeo deve aparecer abaixo.";
+                
+                // Adiciona o canvas da câmera na tela para vermos o resultado
+                document.body.appendChild(webcam.canvas);
 
             } catch (e) {
-                console.error("TESTE: Ocorreu um erro ao carregar o modelo:", e);
-                statusDiv.innerHTML = "FALHA! Ocorreu um erro ao carregar o modelo. Verifique o console.";
+                console.error("TESTE 2: FALHA na câmera:", e);
+                statusDiv.innerHTML = "FALHA! Erro ao tentar usar a câmera. Mensagem: " + e.message;
             }
         }
     </script>
