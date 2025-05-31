@@ -3,147 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner de Cor Direto</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <title>Leitor de Cor em Tempo Real</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #222; /* Fundo escuro para ver o canvas */ }
-        #webcam-container {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        /* O canvas da webcam será adicionado aqui pelo JavaScript */
-        canvas {
-            border: 3px solid limegreen; /* Borda para sabermos se o canvas está lá */
-        }
-        .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 30px;
-            height: 30px;
-            border: 2px solid yellow;
-            transform: translate(-50%, -50%);
-            mix-blend-mode: difference; /* Ajuda a ver a mira em qualquer cor */
-            z-index: 100; /* Garante que a mira fique por cima */
-        }
-        #status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            text-align: center;
-            color: white;
-            background-color: rgba(0,0,0,0.6);
-            padding: 10px;
-            border-radius: 5px;
-            font-family: sans-serif;
-            font-size: 16px;
-            z-index: 100;
-            display: none; /* Começa escondido */
-        }
+        body { margin: 0; padding: 0; background-color: #000; }
+        video { width: 100vw; height: 100vh; object-fit: cover; }
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid white; transform: translate(-50%, -50%); mix-blend-mode: difference; }
+        /* Removi o statusDiv para simplificar, já que a câmera preta é o problema principal */
     </style>
 </head>
 <body>
-    <div id="webcam-container">
-        </div>
+    <video playsinline autoplay></video>
     <div class="crosshair"></div>
-    <div id="status">Aguardando comando para iniciar...</div>
+    <canvas style="display: none;"></canvas>
 
     <script>
-        let webcam; // Usaremos o objeto webcam da biblioteca Teachable Machine
+        const video = document.querySelector('video');
+        const canvas = document.querySelector('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
         let lastColorSent = '';
-        const statusDiv = document.getElementById('status');
-        const webcamContainer = document.getElementById('webcam-container');
-        let cameraInitialized = false;
+        let cameraInitialized = false; // Flag para controlar a inicialização
 
-        function updateStatus(message) {
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-                statusDiv.innerHTML = message;
+        function rgbToHsv(r, g, b) { // Mantive sua função rgbToHsv
+            r /= 255, g /= 255, b /= 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            let d = max - min;
+            s = max === 0 ? 0 : d / max;
+            if (max === min) { h = 0; } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
             }
-            console.log("STATUS: " + message);
+            return [h * 360, s, v];
         }
 
-        // Suas funções rgbToHsv e rgbToColorName (mantidas)
-        function rgbToHsv(r, g, b) {r /= 255, g /= 255, b /= 255;let max = Math.max(r, g, b), min = Math.min(r, g, b);let h, s, v = max;let d = max - min;s = max === 0 ? 0 : d / max;if (max === min) { h = 0; } else {switch (max) {case r: h = (g - b) / d + (g < b ? 6 : 0); break;case g: h = (b - r) / d + 2; break;case b: h = (r - g) / d + 4; break;}h /= 6;}return [h * 360, s, v];}
-        function rgbToColorName(r, g, b) {if (r < 35 && g < 35 && b < 35) return "preto";if (r > 220 && g > 220 && b > 220) return "branco";if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";let hsv = rgbToHsv(r, g, b);let h = hsv[0], s = hsv[1];if (s < 0.25 && (v > 0.8 || v < 0.2) ) { /* baixa saturação não é bege se for muito claro ou escuro */ } else if (s < 0.25) { return "bege"; }if (h < 15 || h >= 345) return "vermelho";if (h >= 15 && h < 45) return "laranja";if (h >= 45 && h < 70) return "amarelo";if (h >= 70 && h < 160) return "verde";if (h >= 160 && h < 260) return "azul";if (h >= 260 && h < 300) return "roxo";if (h >= 300 && h < 345) return "rosa";return "";}
+        function rgbToColorName(r, g, b) { // Mantive sua função rgbToColorName
+            if (r < 35 && g < 35 && b < 35) return "preto";
+            if (r > 220 && g > 220 && b > 220) return "branco";
+            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";
+            let hsv = rgbToHsv(r, g, b);
+            let h = hsv[0], s = hsv[1];
+            if (s < 0.25) return "bege";
+            if (h < 15 || h >= 345) return "vermelho";
+            if (h >= 15 && h < 45) return "laranja";
+            if (h >= 45 && h < 70) return "amarelo";
+            if (h >= 70 && h < 160) return "verde";
+            if (h >= 160 && h < 260) return "azul";
+            if (h >= 260 && h < 300) return "roxo";
+            if (h >= 300 && h < 345) return "rosa";
+            return "";
+        }
 
-        async function initCameraAndDetect() {
-            if (cameraInitialized) return;
+        async function startCamera() {
+            if (cameraInitialized) return; // Previne múltiplas inicializações
             cameraInitialized = true;
-            updateStatus("1. Iniciando câmera...");
+            console.log("JS: startCamera() chamada.");
 
+            const constraints = { video: { facingMode: 'environment' } };
             try {
-                // Usando a mesma largura/altura e flip=false do "Teste 2"
-                // O 'true' no final seria para 'flip' (espelhar), que para a traseira é melhor false.
-                webcam = new tmImage.Webcam(300, 300, false); 
-                updateStatus("2. Objeto webcam criado. Configurando (setup)...");
-
-                await webcam.setup({ video: { facingMode: 'environment' } });
-                updateStatus("3. Câmera configurada. Iniciando vídeo (play)...");
-
-                await webcam.play();
-                updateStatus("4. Câmera ATIVA! Mostrando vídeo...");
-
-                webcamContainer.innerHTML = ''; // Limpa o container
-                webcamContainer.appendChild(webcam.canvas); // Adiciona o canvas da webcam ao container
-                // O tmImage.Webcam cria seu próprio elemento <canvas>
-
-                if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage("camera_pronta");
-                }
-                requestAnimationFrame(colorDetectionLoop);
-
-            } catch (e) {
-                updateStatus("ERRO Câmera: " + e.name + " - " + e.message);
-                console.error("ERRO Câmera:", e);
-                if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage("error:camera_falhou - " + e.message);
-                }
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("camera_pronta");
+                    console.log("JS: Câmera pronta e mensagem enviada.");
+                    requestAnimationFrame(detectColorLoop);
+                };
+            } catch (err) {
+                console.error("JS: Erro ao iniciar a câmera: ", err);
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou - " + err.message);
             }
         }
 
-        function colorDetectionLoop() {
-            if (!webcam || !webcam.canvas || !cameraInitialized || webcam.canvas.width === 0 || webcam.canvas.height === 0) {
-                requestAnimationFrame(colorDetectionLoop); // Se a câmera não estiver pronta, tenta de novo
-                return;
-            }
-
-            // O tmImage.Webcam já atualiza seu próprio canvas.
-            // Precisamos obter o contexto para ler os pixels.
-            const ctx = webcam.canvas.getContext('2d');
-            if (!ctx) {
-                requestAnimationFrame(colorDetectionLoop);
-                return;
-            }
-            
-            try {
-                // webcam.update(); // Chame isso se a imagem no canvas não estiver atualizando
-                const pixelData = ctx.getImageData(webcam.canvas.width / 2, webcam.canvas.height / 2, 1, 1).data;
-                const colorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
-
-                if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
-                    lastColorSent = colorName;
-                    // updateStatus("Cor: " + colorName); // Para depurar visualmente a cor detectada
-                    if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage("color:" + colorName);
-                    }
+        function detectColorLoop() {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const pixelData = context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+            const colorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
+            if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
+                lastColorSent = colorName;
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage("color:" + colorName);
                 }
-            } catch (e) {
-                // Se houver erro ao ler o canvas (pode acontecer se não estiver pronto)
-                // console.error("Erro ao ler pixel:", e);
             }
-            requestAnimationFrame(colorDetectionLoop);
+            requestAnimationFrame(detectColorLoop);
         }
 
+        // EventListener para comandos do Thunkable
         window.addEventListener("message", (event) => {
-            updateStatus("JS: Mensagem Thunkable: " + event.data);
+            console.log("JS: Mensagem recebida do Thunkable: " + event.data);
             if (event.data === 'command:initializeCamera') {
-                initCameraAndDetect();
+                startCamera(); // Thunkable agora comanda o início da câmera
             }
         });
     </script>
