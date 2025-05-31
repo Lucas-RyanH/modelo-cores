@@ -12,7 +12,7 @@
         .action-button { background-color: #4CAF50; color: white; padding: 15px 25px; margin-bottom: 25px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .action-button:active { background-color: #45a049; }
         .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid yellow; transform: translate(-50%, -50%); mix-blend-mode: difference; }
-        canvas { display: none; } /* Canvas oculto para processamento */
+        canvas { display: none; }
     </style>
 </head>
 <body>
@@ -33,11 +33,13 @@
         const voiceButton = document.getElementById('voiceButton');
 
         let targetColor = "";
-        let lastColorSent = ''; // Para a lógica de "só envia se mudar" (que aqui é só para o beep)
-        let lastBeepTime = 0;   // Para controlar a frequência do beep
-        const beepInterval = 2000; // Intervalo mínimo entre beeps em milissegundos (2 segundos)
+        let lastColorSent = '';
+        let lastBeepTime = 0;
+        const beepInterval = 2000; 
 
-        // --- Lógica de Áudio para o Beep ---
+        // Lista de cores que nosso rgbToColorName consegue identificar
+        const supportedColors = ["preto", "branco", "cinza", "bege", "vermelho", "laranja", "amarelo", "verde", "azul", "roxo", "rosa"];
+
         let audioContext;
         function setupAudio() {
             if (!audioContext && (window.AudioContext || window.webkitAudioContext)) {
@@ -45,10 +47,10 @@
             }
         }
         function playBeep() {
-            if (!audioContext) return; // Não pode tocar se o contexto não foi criado
+            if (!audioContext) return; 
             const currentTime = audioContext.currentTime;
             if (currentTime < lastBeepTime + (beepInterval / 1000)) {
-                return; // Ignora se o último beep foi muito recente
+                return; 
             }
             lastBeepTime = currentTime;
 
@@ -57,132 +59,61 @@
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(660, currentTime); // Frequência do beep
-            gainNode.gain.setValueAtTime(0.1, currentTime); // Volume baixo
-            gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3); // Fade out
+            oscillator.frequency.setValueAtTime(660, currentTime);
+            // ##### AJUSTE DE VOLUME AQUI #####
+            gainNode.gain.setValueAtTime(0.8, currentTime); // Exemplo: volume 0.8 (entre 0.0 e 1.0)
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3);
             oscillator.start(currentTime);
-            oscillator.stop(currentTime + 0.3); // Duração do beep
+            oscillator.stop(currentTime + 0.3);
         }
-        // Tenta inicializar o AudioContext após uma interação do usuário
+        
         voiceButton.addEventListener('click', () => {
             if (!audioContext) {
-                setupAudio();
+                setupAudio(); // Inicializa o áudio na primeira interação do usuário
             }
             handleTargetColorVoiceInput();
         });
 
+        function rgbToHsv(r, g, b) { r /= 255, g /= 255, b /= 255; let max = Math.max(r, g, b), min = Math.min(r, g, b); let h, s, v = max; let d = max - min; s = max === 0 ? 0 : d / max; if (max === min) { h = 0; } else { switch (max) { case r: h = (g - b) / d + (g < b ? 6 : 0); break; case g: h = (b - r) / d + 2; break; case b: h = (r - g) / d + 4; break; } h /= 6; } return [h * 360, s, v]; }
+        function rgbToColorName(r, g, b) { if (r < 35 && g < 35 && b < 35) return "preto"; if (r > 220 && g > 220 && b > 220) return "branco"; if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25 && (r > 35 && r < 220)) return "cinza"; let hsv = rgbToHsv(r, g, b); let h = hsv[0], s = hsv[1], v = hsv[2]; if (s < 0.20 && v > 0.5 && (h > 20 && h < 60)) return "bege"; if (h < 15 || h >= 345) return "vermelho"; if (h >= 15 && h < 45) return "laranja"; if (h >= 45 && h < 70) return "amarelo"; if (h >= 70 && h < 160) return "verde"; if (h >= 160 && h < 260) return "azul"; if (h >= 260 && h < 300) return "roxo"; if (h >= 300 && h < 345) { if (v > 0.6 && s > 0.3) return "rosa"; return "rosa"; } return ""; }
 
-        // --- Lógica de Conversão de Cor ---
-        function rgbToHsv(r, g, b) {
-            r /= 255, g /= 255, b /= 255;
-            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, v = max;
-            let d = max - min;
-            s = max === 0 ? 0 : d / max;
-            if (max === min) { h = 0; } else {
-                switch (max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-                h /= 6;
-            }
-            return [h * 360, s, v];
-        }
-        function rgbToColorName(r, g, b) {
-            if (r < 35 && g < 35 && b < 35) return "preto";
-            if (r > 220 && g > 220 && b > 220) return "branco";
-            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25 && (r > 35 && r < 220)) return "cinza";
-            let hsv = rgbToHsv(r, g, b);
-            let h = hsv[0], s = hsv[1], v = hsv[2];
-            if (s < 0.20 && v > 0.5 && (h > 20 && h < 60) ) return "bege"; // Ajustado para bege
-            if (h < 15 || h >= 345) return "vermelho";
-            if (h >= 15 && h < 45)  return "laranja";
-            if (h >= 45 && h < 70)  return "amarelo";
-            if (h >= 70 && h < 160) return "verde";
-            if (h >= 160 && h < 260) return "azul";
-            if (h >= 260 && h < 300) return "roxo";
-            if (h >= 300 && h < 345) return "rosa";
-            return "";
-        }
+        async function startCamera() { statusDiv.innerHTML = 'Tentando acessar a câmera traseira...'; const constraints = { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } } }; try { const stream = await navigator.mediaDevices.getUserMedia(constraints); video.srcObject = stream; video.onloadedmetadata = () => { canvas.width = video.videoWidth; canvas.height = video.videoHeight; statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".'; requestAnimationFrame(detectColorLoop); }; } catch (err) { statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message; console.error("Erro ao iniciar a câmera: ", err); } }
 
-        // --- Lógica da Câmera ---
-        async function startCamera() {
-            statusDiv.innerHTML = 'Tentando acessar a câmera traseira...';
-            const constraints = { video: { facingMode: 'environment', width: { ideal: 640 }, height: {ideal: 480} } };
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".';
-                    requestAnimationFrame(detectColorLoop);
-                };
-            } catch (err) {
-                statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message;
-                console.error("Erro ao iniciar a câmera: ", err);
-            }
-        }
-
-        // --- Lógica de Detecção de Cor ---
-        function detectColorLoop() {
-            if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) {
-                requestAnimationFrame(detectColorLoop); return;
-            }
-            try {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
-                const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
-
-                if (detectedColorName && targetColor && detectedColorName.length > 0 && detectedColorName === targetColor) {
-                    if (detectedColorName !== lastColorSent) { // Só atualiza o status se a cor alvo detectada for "nova"
-                         statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName + "; text-shadow: 0 0 2px black;'>" + detectedColorName.toUpperCase() + "</b>!";
-                         lastColorSent = detectedColorName; // Atualiza para evitar spam de status
-                    }
-                    playBeep(); // Toca o beep se a cor alvo for detectada
-                } else if (detectedColorName && detectedColorName.length > 0 && detectedColorName !== lastColorSent && targetColor) {
-                    // statusDiv.innerHTML = "Vendo: " + detectedColorName + ". Procurando por: " + targetColor;
-                    // lastColorSent = detectedColorName;
-                } else if (!targetColor){
-                    // statusDiv.innerHTML = "Defina uma cor alvo.";
-                }
-
-
-            } catch (e) {
-                console.error("Erro no loop de detecção:", e);
-            }
-            requestAnimationFrame(detectColorLoop);
-        }
-
-        // --- Lógica de Reconhecimento de Voz ---
+        function detectColorLoop() { if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) { requestAnimationFrame(detectColorLoop); return; } try { context.drawImage(video, 0, 0, canvas.width, canvas.height); const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data; const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]); if (detectedColorName && targetColor && detectedColorName.length > 0 && detectedColorName === targetColor) { if (detectedColorName !== lastColorSent) { statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + detectedColorName.toUpperCase() + "</b>!"; lastColorSent = detectedColorName; } playBeep(); } } catch (e) { console.error("Erro no loop de detecção:", e); } requestAnimationFrame(detectColorLoop); }
+        
+        // ##### FUNÇÃO DE VOZ ATUALIZADA #####
         function handleTargetColorVoiceInput() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                statusDiv.innerHTML = "Erro: Reconhecimento de voz não suportado neste navegador.";
+                statusDiv.innerHTML = "Erro: Reconhecimento de voz não suportado.";
                 return;
             }
             const recognition = new SpeechRecognition();
             recognition.lang = 'pt-BR';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
             recognition.start();
             statusDiv.innerHTML = "Ouvindo...";
 
             recognition.onresult = (event) => {
                 let spokenText = event.results[0][0].transcript.toLowerCase().trim();
-                // Pequena correção para cores compostas que podem ser faladas juntas
-                if (spokenText.includes("azul claro")) spokenText = "azul"; // Exemplo
-                if (spokenText.includes("verde claro")) spokenText = "verde"; // Exemplo
-
-                targetColor = spokenText;
-                lastColorSent = ""; // Reseta para que o status da cor possa ser mostrado de novo
-                statusDiv.innerHTML = "Procurando por: <b>" + targetColor + "</b>";
+                // Simplificação de aliases (pode expandir se necessário)
+                if (spokenText.includes("azul claro") || spokenText.includes("azul escuro")) spokenText = "azul";
+                if (spokenText.includes("verde claro") || spokenText.includes("verde escuro")) spokenText = "verde";
+                
+                if (supportedColors.includes(spokenText)) {
+                    targetColor = spokenText;
+                    lastColorSent = ""; 
+                    statusDiv.innerHTML = "Procurando por: <b style='color:" + targetColor.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + targetColor.toUpperCase() + "</b>";
+                } else {
+                    targetColor = ""; // Limpa o alvo se a cor não for suportada
+                    statusDiv.innerHTML = "Cor '" + spokenText + "' não suportada. Tente: " + supportedColors.slice(0, 5).join(", ") + "...";
+                }
             };
             recognition.onerror = (event) => {
                 statusDiv.innerHTML = "Erro na voz: " + event.error;
                 if (event.error === 'no-speech') {
-                    statusDiv.innerHTML = "Nenhuma fala detectada. Tente de novo.";
+                    statusDiv.innerHTML = "Nenhuma fala detectada. Clique para tentar de novo.";
+                } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    statusDiv.innerHTML = "Permissão para microfone negada. Verifique as configurações do navegador.";
                 }
             };
             recognition.onspeechend = () => {
@@ -190,8 +121,7 @@
             };
         }
         
-        // Inicia a câmera assim que a página carrega
-        startCamera();
+        startCamera(); // Inicia a câmera quando a página carrega
     </script>
 </body>
 </html>
