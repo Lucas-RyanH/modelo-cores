@@ -1,31 +1,43 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Cor em Tempo Real (Base Usuário)</title>
+    <title>Leitor de Cor - Teste de Botão Interno</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; }
-        video { width: 100vw; height: 100vh; object-fit: cover; }
-        .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid white; transform: translate(-50%, -50%); mix-blend-mode: difference; }
+        body { margin: 0; padding: 0; background-color: #000; text-align: center; }
+        video { width: 90vw; height: 70vh; object-fit: cover; border: 2px solid lime; margin-top: 10px;}
+        .crosshair { position: absolute; top: calc(35vh + 10px); /* Aproximadamente no centro do vídeo */ left: 50%; width: 30px; height: 30px; border: 2px solid white; transform: translate(-50%, -50%); mix-blend-mode: difference; }
+        button { font-size: 20px; padding: 15px; margin-top: 20px; }
+        #status { color: white; font-family: sans-serif; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <video playsinline autoplay muted></video> <div class="crosshair"></div>
+    <button onclick="startCamera()">Ligar Câmera Manualmente (Teste HTML)</button>
+    <div id="status">Clique no botão para iniciar a câmera.</div>
+    <video playsinline autoplay muted></video>
+    <div class="crosshair"></div>
     <canvas style="display: none;"></canvas>
 
     <script>
         const video = document.querySelector('video');
         const canvas = document.querySelector('canvas');
         const context = canvas.getContext('2d', { willReadFrequently: true });
+        const statusDiv = document.getElementById('status');
         let lastColorSent = '';
-        let cameraInitialized = false; // Adicionamos para controle
+        // cameraInitialized não é estritamente necessário para este teste de botão único,
+        // mas não prejudica.
+
+        function updateStatus(message) {
+            statusDiv.innerHTML = message;
+            console.log("STATUS_HTML: " + message);
+        }
 
         // Função para converter RGB para um nome de cor básico (A SUA VERSÃO)
         function rgbToColorName(r, g, b) {
             if (r < 40 && g < 40 && b < 40) return "preto";
             if (r > 220 && g > 220 && b > 220) return "branco";
-            if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) return "cinza"; // Você tinha essa lógica de cinza
+            if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) return "cinza";
             if (r > g + 30 && r > b + 30) return "vermelho";
             if (g > r + 30 && g > b + 30) return "verde";
             if (b > r + 30 && b > g + 30) return "azul";
@@ -36,29 +48,26 @@
         }
 
         async function startCamera() {
-            // Previne múltiplas inicializações se o comando for enviado mais de uma vez
-            if (cameraInitialized) {
-                console.log("JS: Câmera já inicializada.");
-                return;
-            }
-            cameraInitialized = true;
-            console.log("JS: startCamera() chamada pelo Thunkable.");
-
+            updateStatus("Botão clicado. Tentando iniciar startCamera()...");
             const constraints = { video: { facingMode: 'environment' } };
             try {
+                updateStatus("Pedindo permissão da câmera (getUserMedia)...");
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                updateStatus("Stream da câmera atribuído. Aguardando metadados...");
                 video.onloadedmetadata = () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
-                    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("camera_pronta");
-                    console.log("JS: Câmera pronta e mensagem enviada.");
+                    updateStatus("Câmera PRONTA! Iniciando detecção de cor.");
+                    // Removido postMessage para Thunkable neste teste
+                    // if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("camera_pronta");
                     requestAnimationFrame(detectColorLoop);
                 };
             } catch (err) {
-                console.error("JS: Erro ao iniciar a câmera: ", err);
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou - " + err.message);
-                cameraInitialized = false; // Permite tentar de novo em caso de erro
+                updateStatus("ERRO ao iniciar a câmera: " + err.name + " - " + err.message);
+                console.error("Erro ao iniciar a câmera: ", err);
+                // Removido postMessage para Thunkable neste teste
+                // if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou");
             }
         }
 
@@ -74,26 +83,21 @@
 
                 if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
                     lastColorSent = colorName;
-                    if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage("color:" + colorName);
-                    }
+                    updateStatus("Cor detectada: " + colorName); // Mostra a cor na tela
+                    // Removido postMessage para Thunkable neste teste
+                    // if (window.ReactNativeWebView) {
+                    //     window.ReactNativeWebView.postMessage("color:" + colorName);
+                    // }
                 }
             } catch (e) {
                 console.error("JS: Erro no detectColorLoop:", e);
+                updateStatus("Erro no loop de detecção.");
             }
             requestAnimationFrame(detectColorLoop);
         }
 
-        // EventListener para comandos do Thunkable
-        window.addEventListener("message", (event) => {
-            console.log("JS: Mensagem recebida do Thunkable: " + event.data);
-            if (event.data === 'command:initializeCamera') {
-                startCamera(); // Thunkable agora comanda o início da câmera
-            }
-        });
-
-        // A linha "startCamera();" foi REMOVIDA daqui.
-        // A câmera só inicia com o comando do Thunkable via EventListener.
+        // REMOVEMOS o EventListener para Thunkable neste teste.
+        // REMOVEMOS a chamada automática de startCamera();
     </script>
 </body>
 </html>
