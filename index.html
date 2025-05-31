@@ -3,102 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Cor em Tempo Real</title>
+    <title>Leitor de Cor - Teste Câmera Simples</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; }
-        video { width: 100vw; height: 100vh; object-fit: cover; }
-        .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid white; transform: translate(-50%, -50%); mix-blend-mode: difference; }
-        /* Removi o statusDiv para simplificar, já que a câmera preta é o problema principal */
+        body { margin: 0; padding: 0; background-color: #333; /* Fundo para contraste */ }
+        video {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            border: 5px solid limegreen; /* Borda verde para vermos o elemento video */
+        }
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid yellow; transform: translate(-50%, -50%); mix-blend-mode: difference; }
+        .status-overlay { position: absolute; top: 10px; left: 10px; right: 10px; text-align: center; color: white; background-color: rgba(0,0,0,0.7); z-index: 20; padding: 15px; border-radius: 10px; font-family: sans-serif; font-size: 18px;}
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 </head>
 <body>
-    <video playsinline autoplay></video>
-    <div class="crosshair"></div>
+    <video playsinline autoplay muted></video> <div class="crosshair"></div>
     <canvas style="display: none;"></canvas>
+    <div id="status" class="status-overlay" style="display: none;">Status...</div>
 
     <script>
         const video = document.querySelector('video');
         const canvas = document.querySelector('canvas');
         const context = canvas.getContext('2d', { willReadFrequently: true });
+        let statusDiv = document.getElementById('status'); // Pega o statusDiv aqui
         let lastColorSent = '';
-        let cameraInitialized = false; // Flag para controlar a inicialização
+        let cameraInitialized = false;
+        let model; // Declaramos o modelo aqui para que predict possa acessá-lo
 
-        function rgbToHsv(r, g, b) { // Mantive sua função rgbToHsv
-            r /= 255, g /= 255, b /= 255;
-            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, v = max;
-            let d = max - min;
-            s = max === 0 ? 0 : d / max;
-            if (max === min) { h = 0; } else {
-                switch (max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-                h /= 6;
+        function updateStatus(message) {
+            if (statusDiv) {
+                statusDiv.style.display = 'block'; // Garante que está visível
+                statusDiv.innerHTML = message;
             }
-            return [h * 360, s, v];
+            console.log("STATUS_UPDATE: " + message);
         }
+        
+        // Suas funções rgbToHsv e rgbToColorName
+        function rgbToHsv(r, g, b) {r /= 255, g /= 255, b /= 255;let max = Math.max(r, g, b), min = Math.min(r, g, b);let h, s, v = max;let d = max - min;s = max === 0 ? 0 : d / max;if (max === min) { h = 0; } else {switch (max) {case r: h = (g - b) / d + (g < b ? 6 : 0); break;case g: h = (b - r) / d + 2; break;case b: h = (r - g) / d + 4; break;}h /= 6;}return [h * 360, s, v];}
+        function rgbToColorName(r, g, b) {if (r < 35 && g < 35 && b < 35) return "preto";if (r > 220 && g > 220 && b > 220) return "branco";if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";let hsv = rgbToHsv(r, g, b);let h = hsv[0], s = hsv[1];if (s < 0.25) return "bege";if (h < 15 || h >= 345) return "vermelho";if (h >= 15 && h < 45) return "laranja";if (h >= 45 && h < 70) return "amarelo";if (h >= 70 && h < 160) return "verde";if (h >= 160 && h < 260) return "azul";if (h >= 260 && h < 300) return "roxo";if (h >= 300 && h < 345) return "rosa";return "";}
 
-        function rgbToColorName(r, g, b) { // Mantive sua função rgbToColorName
-            if (r < 35 && g < 35 && b < 35) return "preto";
-            if (r > 220 && g > 220 && b > 220) return "branco";
-            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && r > 40 && r < 190) return "cinza";
-            let hsv = rgbToHsv(r, g, b);
-            let h = hsv[0], s = hsv[1];
-            if (s < 0.25) return "bege";
-            if (h < 15 || h >= 345) return "vermelho";
-            if (h >= 15 && h < 45) return "laranja";
-            if (h >= 45 && h < 70) return "amarelo";
-            if (h >= 70 && h < 160) return "verde";
-            if (h >= 160 && h < 260) return "azul";
-            if (h >= 260 && h < 300) return "roxo";
-            if (h >= 300 && h < 345) return "rosa";
-            return "";
-        }
-
+        // Função startCamera modificada para o teste simples
         async function startCamera() {
-            if (cameraInitialized) return; // Previne múltiplas inicializações
+            if (cameraInitialized) {
+                updateStatus("JS: Tentativa de reinicializar câmera ignorada.");
+                return;
+            }
             cameraInitialized = true;
-            console.log("JS: startCamera() chamada.");
+            updateStatus("JS: startCamera() chamada - TENTATIVA SIMPLES.");
 
-            const constraints = { video: { facingMode: 'environment' } };
+            const constraints = { video: true }; // Pedido mais simples possível
+            updateStatus("JS: Constraints da câmera (simples): " + JSON.stringify(constraints));
+
             try {
+                updateStatus("JS: Tentando navigator.mediaDevices.getUserMedia (simples)...");
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                updateStatus("JS: Stream da câmera obtido (simples).");
                 video.srcObject = stream;
+                
+                await video.play(); // Tenta dar play explicitamente
+                updateStatus("JS: video.play() chamado.");
+
                 video.onloadedmetadata = () => {
+                    updateStatus("JS: Metadados do vídeo carregados.");
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("camera_pronta");
-                    console.log("JS: Câmera pronta e mensagem enviada.");
+                    updateStatus("JS: Câmera pronta e mensagem enviada para Thunkable (simples). Iniciando loop de cor...");
                     requestAnimationFrame(detectColorLoop);
                 };
+
+                video.onplaying = () => {
+                    updateStatus("JS: Evento 'onplaying' do vídeo disparado. A CÂMERA DEVE ESTAR VISÍVEL!");
+                };
+
             } catch (err) {
-                console.error("JS: Erro ao iniciar a câmera: ", err);
-                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou - " + err.message);
+                updateStatus("JS: Erro CRÍTICO ao iniciar a câmera (getUserMedia SIMPLES): " + err.name + " - " + err.message);
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage("error:camera_falhou_simples - " + err.name + ": " + err.message);
             }
         }
+        
+        // Funções setTargetColor e startVoiceRecognition NÃO SÃO USADAS NESTE TESTE DE HTML PURO,
+        // mas as mantemos aqui para quando o código for reintegrado com o Thunkable.
+        // Elas seriam chamadas pelo EventListener se Thunkable enviasse os comandos.
+        let targetColor = ""; // Apenas para que predict não falhe
+        function setTargetColor(color) { targetColor = color.toLowerCase(); /* ... */ }
+        function startVoiceRecognition() { /* ... lógica de voz aqui ... */ }
 
+        // O EventListener ainda é importante para o comando do Thunkable
+        window.addEventListener("message", (event) => {
+            updateStatus("JS: Mensagem recebida do Thunkable: " + event.data);
+            if (event.data === 'command:initializeCamera') {
+                startCamera(); // Thunkable comanda o início da câmera
+            }
+        });
+
+        // Loop de detecção de cor (simplificado para este teste, já que o modelo não está sendo carregado)
         function detectColorLoop() {
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const pixelData = context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
-            const colorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
-            if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
-                lastColorSent = colorName;
-                if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage("color:" + colorName);
+            if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) {
+                requestAnimationFrame(detectColorLoop);
+                return;
+            }
+            try {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const pixelData = context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+                const colorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
+                if (colorName && colorName.length > 0 && colorName !== lastColorSent) {
+                    lastColorSent = colorName;
+                    // Neste teste simplificado, não enviaremos "color:" para Thunkable
+                    // apenas para focar no funcionamento da câmera.
+                    // Mas você pode adicionar logs aqui se quiser:
+                    // updateStatus("Cor detectada (não enviada): " + colorName);
                 }
+            } catch (e) {
+                updateStatus("JS: Erro no detectColorLoop: " + e.message);
             }
             requestAnimationFrame(detectColorLoop);
         }
+        
+        // Neste teste, a câmera será iniciada pelo comando do Thunkable.
+        // Se quiser testar o HTML isoladamente, descomente a linha abaixo:
+        // document.addEventListener("DOMContentLoaded", startCamera);
 
-        // EventListener para comandos do Thunkable
-        window.addEventListener("message", (event) => {
-            console.log("JS: Mensagem recebida do Thunkable: " + event.data);
-            if (event.data === 'command:initializeCamera') {
-                startCamera(); // Thunkable agora comanda o início da câmera
-            }
-        });
     </script>
 </body>
 </html>
