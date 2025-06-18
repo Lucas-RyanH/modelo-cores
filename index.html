@@ -35,33 +35,32 @@
         .status-bar {
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 20px 30px; /* Aumentado drasticamente */
-            margin-top: 30px; /* Aumentado drasticamente */
-            border-radius: 16px; /* Aumentado */
-            font-size: 30px; /* Aumentado drasticamente para melhor leitura */
+            padding: 20px 30px;
+            margin-top: 30px;
+            border-radius: 16px;
+            font-size: 30px;
             text-align: center;
-            width: 90vw; /* Para ocupar mais a largura */
-            box-sizing: border-box; /* Para incluir padding na largura */
+            width: 90vw;
+            box-sizing: border-box;
         }
 
-        /* Updated action-button style for massively larger button */
         .action-button {
             background-color: #4CAF50;
             color: white;
-            width: 95vw; /* Aumentado para quase toda a largura da viewport */
-            padding: 70px 0; /* Aumentado drasticamente para maior altura */
-            margin-bottom: 50px; /* Aumentado para mais espaço */
+            width: 95vw;
+            padding: 70px 0;
+            margin-bottom: 50px;
             border: none;
-            border-radius: 30px; /* Aumentado para cantos mais suaves em botão maior */
-            font-size: 50px; /* Aumentado drasticamente para melhor legibilidade */
+            border-radius: 30px;
+            font-size: 50px;
             font-weight: bold; 
             cursor: pointer;
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3); /* Sombra um pouco maior e mais escura */
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
             text-align: center;
             display: block;
             margin-left: auto;
             margin-right: auto;
-            line-height: 1.2; /* Para melhor espaçamento do texto se quebrar linha */
+            line-height: 1.2;
         }
 
         .action-button:active {
@@ -72,8 +71,8 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 30px; /* Mantido, pois é um guia visual, não um controle primário */
-            height: 30px; /* Mantido */
+            width: 30px;
+            height: 30px;
             border: 2px solid yellow;
             transform: translate(-50%, -50%);
             mix-blend-mode: difference;
@@ -104,60 +103,132 @@
         let targetColor = "";
         let lastColorSent = '';
         let lastBeepTime = 0;
-        const beepInterval = 2000; // Milliseconds
+        const beepInterval = 300; // Bipes mais rápidos (a cada 300ms)
 
-        // Lista de cores que nosso rgbToColorName consegue identificar
         const supportedColors = ["preto", "branco", "cinza", "bege", "vermelho", "laranja", "amarelo", "verde", "azul", "roxo", "rosa"];
 
         let audioContext;
         function setupAudio() {
-            // Inicializa o AudioContext na primeira interação do usuário para compatibilidade com políticas de autoplay
             if (!audioContext && (window.AudioContext || window.webkitAudioContext)) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
         }
+
         function playBeep() {
-            if (!audioContext) return; 
+            if (!audioContext) return;
             const currentTime = audioContext.currentTime;
-            // Limita a frequência dos beeps
-            if (currentTime < lastBeepTime + (beepInterval / 1000)) {
-                return; 
-            }
+            if (currentTime < lastBeepTime + (beepInterval / 1000)) return;
             lastBeepTime = currentTime;
 
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-            oscillator.type = 'sine'; // Tipo de onda
-            oscillator.frequency.setValueAtTime(660, currentTime); // Frequência em Hz (La)
-            // Ajuste de volume do beep
-            gainNode.gain.setValueAtTime(0.8, currentTime); // Volume (0.0 a 1.0)
-            gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3); // Fade out
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(660, currentTime);
+            gainNode.gain.setValueAtTime(0.8, currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3);
             oscillator.start(currentTime);
-            oscillator.stop(currentTime + 0.3); // Duração do beep
+            oscillator.stop(currentTime + 0.3);
         }
-        
+
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'pt-BR';
+            utterance.volume = 1;
+            utterance.rate = 1;
+            utterance.pitch = 1;
+            speechSynthesis.speak(utterance);
+        }
+
         voiceButton.addEventListener('click', () => {
-            if (!audioContext) {
-                setupAudio(); // Garante que o AudioContext foi inicializado
-            }
+            if (!audioContext) setupAudio();
             handleTargetColorVoiceInput();
         });
 
-        // Converte RGB para HSV (Hue, Saturation, Value)
-        function rgbToHsv(r, g, b) { r /= 255, g /= 255, b /= 255; let max = Math.max(r, g, b), min = Math.min(r, g, b); let h, s, v = max; let d = max - min; s = max === 0 ? 0 : d / max; if (max === min) { h = 0; /* achromatic */ } else { switch (max) { case r: h = (g - b) / d + (g < b ? 6 : 0); break; case g: h = (b - r) / d + 2; break; case b: h = (r - g) / d + 4; break; } h /= 6; } return [h * 360, s, v]; }
-        
-        // Converte RGB para um nome de cor aproximado
-        function rgbToColorName(r, g, b) { if (r < 35 && g < 35 && b < 35) return "preto"; if (r > 220 && g > 220 && b > 220) return "branco"; if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25 && (r > 35 && r < 220)) return "cinza"; let hsv = rgbToHsv(r, g, b); let h = hsv[0], s = hsv[1], v = hsv[2]; if (s < 0.20 && v > 0.5 && (h > 20 && h < 60)) return "bege"; if (h < 15 || h >= 345) return "vermelho"; if (h >= 15 && h < 45) return "laranja"; if (h >= 45 && h < 70) return "amarelo"; if (h >= 70 && h < 160) return "verde"; if (h >= 160 && h < 260) return "azul"; if (h >= 260 && h < 300) return "roxo"; if (h >= 300 && h < 345) { if (v > 0.6 && s > 0.3) return "rosa"; /* Condição mais específica para rosa */ return "rosa"; } return ""; /* Cor não classificada */ }
+        function rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            let d = max - min;
+            s = max === 0 ? 0 : d / max;
+            if (max === min) {
+                h = 0;
+            } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [h * 360, s, v];
+        }
 
-        // Inicia a câmera
-        async function startCamera() { statusDiv.innerHTML = 'Tentando acessar a câmera traseira...'; const constraints = { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } } }; try { const stream = await navigator.mediaDevices.getUserMedia(constraints); video.srcObject = stream; video.onloadedmetadata = () => { canvas.width = video.videoWidth; canvas.height = video.videoHeight; statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".'; requestAnimationFrame(detectColorLoop); }; } catch (err) { statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message; console.error("Erro ao iniciar a câmera: ", err); } }
+        function rgbToColorName(r, g, b) {
+            if (r < 35 && g < 35 && b < 35) return "preto";
+            if (r > 220 && g > 220 && b > 220) return "branco";
+            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && (r > 35 && r < 220)) return "cinza";
+            let [h, s, v] = rgbToHsv(r, g, b);
+            if (s < 0.20 && v > 0.5 && (h > 20 && h < 60)) return "bege";
+            if (h < 15 || h >= 345) return "vermelho";
+            if (h >= 15 && h < 45) return "laranja";
+            if (h >= 45 && h < 70) return "amarelo";
+            if (h >= 70 && h < 160) return "verde";
+            if (h >= 160 && h < 260) return "azul";
+            if (h >= 260 && h < 300) return "roxo";
+            if (h >= 300 && h < 345) return "rosa";
+            return "";
+        }
 
-        // Loop de detecção de cor
-        function detectColorLoop() { if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) { requestAnimationFrame(detectColorLoop); return; } try { context.drawImage(video, 0, 0, canvas.width, canvas.height); const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data; const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]); if (detectedColorName && targetColor && detectedColorName.length > 0 && detectedColorName === targetColor) { if (detectedColorName !== lastColorSent) { statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + detectedColorName.toUpperCase() + "</b>!"; lastColorSent = detectedColorName; } playBeep(); } } catch (e) { console.error("Erro no loop de detecção:", e); } requestAnimationFrame(detectColorLoop); }
-        
-        // Manipula a entrada de voz para a cor alvo
+        async function startCamera() {
+            statusDiv.innerHTML = 'Tentando acessar a câmera traseira...';
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                }
+            };
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".';
+                    requestAnimationFrame(detectColorLoop);
+                };
+            } catch (err) {
+                statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message;
+                console.error("Erro ao iniciar a câmera: ", err);
+            }
+        }
+
+        function detectColorLoop() {
+            if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) {
+                requestAnimationFrame(detectColorLoop);
+                return;
+            }
+            try {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
+                const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
+
+                if (detectedColorName && targetColor && detectedColorName === targetColor) {
+                    if (detectedColorName !== lastColorSent) {
+                        statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + detectedColorName.toUpperCase() + "</b>!";
+                        lastColorSent = detectedColorName;
+                        speak(detectedColorName);
+                    }
+                    playBeep();
+                }
+            } catch (e) {
+                console.error("Erro no loop de detecção:", e);
+            }
+            requestAnimationFrame(detectColorLoop);
+        }
+
         function handleTargetColorVoiceInput() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -165,42 +236,40 @@
                 return;
             }
             const recognition = new SpeechRecognition();
-            recognition.lang = 'pt-BR'; // Define o idioma para Português do Brasil
+            recognition.lang = 'pt-BR';
             recognition.start();
             statusDiv.innerHTML = "Ouvindo...";
 
             recognition.onresult = (event) => {
                 let spokenText = event.results[0][0].transcript.toLowerCase().trim();
-                // Simplificação de aliases (pode expandir se necessário)
                 if (spokenText.includes("azul claro") || spokenText.includes("azul escuro")) spokenText = "azul";
                 if (spokenText.includes("verde claro") || spokenText.includes("verde escuro")) spokenText = "verde";
-                // Adicione mais aliases conforme necessário, ex: "vinho" -> "vermelho"
-                
+
                 if (supportedColors.includes(spokenText)) {
                     targetColor = spokenText;
-                    lastColorSent = ""; // Reseta a última cor enviada para que o status atualize
+                    lastColorSent = "";
                     statusDiv.innerHTML = "Procurando por: <b style='color:" + targetColor.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + targetColor.toUpperCase() + "</b>";
                 } else {
-                    targetColor = ""; // Limpa o alvo se a cor não for suportada
+                    targetColor = "";
                     statusDiv.innerHTML = "Cor '" + spokenText + "' não suportada. Tente: " + supportedColors.slice(0, 5).join(", ") + "...";
                 }
             };
+
             recognition.onerror = (event) => {
                 statusDiv.innerHTML = "Erro no reconhecimento de voz: " + event.error;
                 if (event.error === 'no-speech') {
                     statusDiv.innerHTML = "Nenhuma fala detectada. Clique para tentar de novo.";
-                } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    // Este erro geralmente significa que o usuário negou permissão ao microfone
+                } else if (event.error === 'not-allowed') {
                     statusDiv.innerHTML = "Permissão para microfone negada. Verifique as configurações do navegador.";
                 }
             };
+
             recognition.onspeechend = () => {
                 recognition.stop();
-                // Pode adicionar uma mensagem como "Processando..." ou deixar como está
             };
         }
-        
-        startCamera(); // Inicia a câmera assim que a página carrega
+
+        startCamera();
     </script>
 </body>
 </html>
