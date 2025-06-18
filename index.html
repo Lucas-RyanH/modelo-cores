@@ -1,275 +1,277 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Scanner de Cor Autônomo</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Scanner de Cor Autônomo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
 
-        video {
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-        }
+    video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+    }
 
-        .overlay-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 10;
-        }
+    .overlay-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
 
-        .status-bar {
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 20px 30px;
-            margin-top: 30px;
-            border-radius: 16px;
-            font-size: 30px;
-            text-align: center;
-            width: 90vw;
-            box-sizing: border-box;
-        }
+    .status-bar {
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 20px 30px;
+      margin-top: 30px;
+      border-radius: 16px;
+      font-size: 30px;
+      text-align: center;
+      width: 90vw;
+      box-sizing: border-box;
+    }
 
-        .action-button {
-            background-color: #4CAF50;
-            color: white;
-            width: 95vw;
-            padding: 70px 0;
-            margin-bottom: 50px;
-            border: none;
-            border-radius: 30px;
-            font-size: 50px;
-            font-weight: bold; 
-            cursor: pointer;
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-            line-height: 1.2;
-        }
+    .action-button {
+      background-color: #4CAF50;
+      color: white;
+      width: 95vw;
+      padding: 70px 0;
+      margin-bottom: 50px;
+      border: none;
+      border-radius: 30px;
+      font-size: 50px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.2;
+    }
 
-        .action-button:active {
-            background-color: #45a049;
-        }
+    .action-button:active {
+      background-color: #45a049;
+    }
 
-        .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 30px;
-            height: 30px;
-            border: 2px solid yellow;
-            transform: translate(-50%, -50%);
-            mix-blend-mode: difference;
-        }
+    .crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 30px;
+      height: 30px;
+      border: 2px solid yellow;
+      transform: translate(-50%, -50%);
+      mix-blend-mode: difference;
+    }
 
-        canvas {
-            display: none;
-        }
-    </style>
+    canvas {
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <video playsinline autoplay muted></video>
-    <div class="crosshair"></div>
-    <canvas></canvas>
+  <video playsinline autoplay muted></video>
+  <div class="crosshair"></div>
+  <canvas></canvas>
 
-    <div class="overlay-container">
-        <div id="status" class="status-bar">Iniciando câmera...</div>
-        <button id="voiceButton" class="action-button">Falar Cor Alvo</button>
-    </div>
+  <div class="overlay-container">
+    <div id="status" class="status-bar">Iniciando câmera...</div>
+    <button id="voiceButton" class="action-button">Falar Cor Alvo</button>
+  </div>
 
-    <script>
-        const video = document.querySelector('video');
-        const canvas = document.querySelector('canvas');
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        const statusDiv = document.getElementById('status');
-        const voiceButton = document.getElementById('voiceButton');
+  <script>
+    const video = document.querySelector('video');
+    const canvas = document.querySelector('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const statusDiv = document.getElementById('status');
+    const voiceButton = document.getElementById('voiceButton');
 
-        let targetColor = "";
-        let lastColorSent = '';
-        let lastBeepTime = 0;
-        const beepInterval = 300; // Bipes mais rápidos (a cada 300ms)
+    let targetColor = "";
+    let lastColorSent = '';
+    let lastBeepTime = 0;
+    const beepInterval = 300; // <-- Beep mais rápido (300ms)
 
-        const supportedColors = ["preto", "branco", "cinza", "bege", "vermelho", "laranja", "amarelo", "verde", "azul", "roxo", "rosa"];
+    const supportedColors = ["preto", "branco", "cinza", "bege", "vermelho", "laranja", "amarelo", "verde", "azul", "roxo", "rosa"];
 
-        let audioContext;
-        function setupAudio() {
-            if (!audioContext && (window.AudioContext || window.webkitAudioContext)) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
+    let audioContext;
+    function setupAudio() {
+      if (!audioContext && (window.AudioContext || window.webkitAudioContext)) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function playBeep() {
+      if (!audioContext) return;
+      const currentTime = audioContext.currentTime;
+      if (currentTime < lastBeepTime + (beepInterval / 1000)) return;
+      lastBeepTime = currentTime;
+
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(660, currentTime);
+      gainNode.gain.setValueAtTime(0.8, currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3);
+      oscillator.start(currentTime);
+      oscillator.stop(currentTime + 0.3);
+    }
+
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    voiceButton.addEventListener('click', () => {
+      setupAudio();
+      handleTargetColorVoiceInput();
+    });
+
+    function rgbToHsv(r, g, b) {
+      r /= 255;
+      g /= 255;
+      b /= 255;
+      let max = Math.max(r, g, b),
+        min = Math.min(r, g, b);
+      let h, s, v = max;
+      let d = max - min;
+      s = max === 0 ? 0 : d / max;
+      if (max === min) {
+        h = 0;
+      } else {
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
         }
+        h /= 6;
+      }
+      return [h * 360, s, v];
+    }
 
-        function playBeep() {
-            if (!audioContext) return;
-            const currentTime = audioContext.currentTime;
-            if (currentTime < lastBeepTime + (beepInterval / 1000)) return;
-            lastBeepTime = currentTime;
+    function rgbToColorName(r, g, b) {
+      if (r < 35 && g < 35 && b < 35) return "preto";
+      if (r > 220 && g > 220 && b > 220) return "branco";
+      if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && (r > 35 && r < 220)) return "cinza";
+      let hsv = rgbToHsv(r, g, b);
+      let h = hsv[0], s = hsv[1], v = hsv[2];
+      if (s < 0.20 && v > 0.5 && (h > 20 && h < 60)) return "bege";
+      if (h < 15 || h >= 345) return "vermelho";
+      if (h >= 15 && h < 45) return "laranja";
+      if (h >= 45 && h < 70) return "amarelo";
+      if (h >= 70 && h < 160) return "verde";
+      if (h >= 160 && h < 260) return "azul";
+      if (h >= 260 && h < 300) return "roxo";
+      if (h >= 300 && h < 345) return "rosa";
+      return "";
+    }
 
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(660, currentTime);
-            gainNode.gain.setValueAtTime(0.8, currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + 0.3);
-            oscillator.start(currentTime);
-            oscillator.stop(currentTime + 0.3);
+    async function startCamera() {
+      statusDiv.innerHTML = 'Tentando acessar a câmera traseira...';
+      const constraints = {
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+      };
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".';
+          requestAnimationFrame(detectColorLoop);
+        };
+      } catch (err) {
+        statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message;
+        console.error("Erro ao iniciar a câmera: ", err);
+      }
+    }
+
+    function detectColorLoop() {
+      if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) {
+        requestAnimationFrame(detectColorLoop);
+        return;
+      }
+      try {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
+        const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
+
+        if (detectedColorName && targetColor && detectedColorName === targetColor) {
+          if (detectedColorName !== lastColorSent) {
+            statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + detectedColorName.toUpperCase() + "</b>!";
+            speak(detectedColorName); // <--- Fala a cor quando encontra
+            lastColorSent = detectedColorName;
+          }
+          playBeep();
         }
+      } catch (e) {
+        console.error("Erro no loop de detecção:", e);
+      }
+      requestAnimationFrame(detectColorLoop);
+    }
 
-        function speak(text) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'pt-BR';
-            utterance.volume = 1;
-            utterance.rate = 1;
-            utterance.pitch = 1;
-            speechSynthesis.speak(utterance);
+    function handleTargetColorVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        statusDiv.innerHTML = "Erro: Reconhecimento de voz não suportado neste navegador.";
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.start();
+      statusDiv.innerHTML = "Ouvindo...";
+
+      recognition.onresult = (event) => {
+        let spokenText = event.results[0][0].transcript.toLowerCase().trim();
+        if (spokenText.includes("azul claro") || spokenText.includes("azul escuro")) spokenText = "azul";
+        if (spokenText.includes("verde claro") || spokenText.includes("verde escuro")) spokenText = "verde";
+
+        if (supportedColors.includes(spokenText)) {
+          targetColor = spokenText;
+          lastColorSent = "";
+          statusDiv.innerHTML = "Procurando por: <b style='color:" + targetColor.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + targetColor.toUpperCase() + "</b>";
+          speak(targetColor); // <--- FALA A COR LOGO APÓS OUVIR
+        } else {
+          targetColor = "";
+          statusDiv.innerHTML = "Cor '" + spokenText + "' não suportada. Tente: " + supportedColors.slice(0, 5).join(", ") + "...";
         }
+      };
 
-        voiceButton.addEventListener('click', () => {
-            if (!audioContext) setupAudio();
-            handleTargetColorVoiceInput();
-        });
-
-        function rgbToHsv(r, g, b) {
-            r /= 255; g /= 255; b /= 255;
-            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, v = max;
-            let d = max - min;
-            s = max === 0 ? 0 : d / max;
-            if (max === min) {
-                h = 0;
-            } else {
-                switch (max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-                h /= 6;
-            }
-            return [h * 360, s, v];
+      recognition.onerror = (event) => {
+        if (event.error === 'no-speech') {
+          statusDiv.innerHTML = "Nenhuma fala detectada. Clique para tentar de novo.";
+        } else if (event.error === 'not-allowed') {
+          statusDiv.innerHTML = "Permissão para microfone negada.";
+        } else {
+          statusDiv.innerHTML = "Erro no reconhecimento de voz: " + event.error;
         }
+      };
 
-        function rgbToColorName(r, g, b) {
-            if (r < 35 && g < 35 && b < 35) return "preto";
-            if (r > 220 && g > 220 && b > 220) return "branco";
-            if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && (r > 35 && r < 220)) return "cinza";
-            let [h, s, v] = rgbToHsv(r, g, b);
-            if (s < 0.20 && v > 0.5 && (h > 20 && h < 60)) return "bege";
-            if (h < 15 || h >= 345) return "vermelho";
-            if (h >= 15 && h < 45) return "laranja";
-            if (h >= 45 && h < 70) return "amarelo";
-            if (h >= 70 && h < 160) return "verde";
-            if (h >= 160 && h < 260) return "azul";
-            if (h >= 260 && h < 300) return "roxo";
-            if (h >= 300 && h < 345) return "rosa";
-            return "";
-        }
+      recognition.onspeechend = () => {
+        recognition.stop();
+      };
+    }
 
-        async function startCamera() {
-            statusDiv.innerHTML = 'Tentando acessar a câmera traseira...';
-            const constraints = {
-                video: {
-                    facingMode: 'environment',
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                }
-            };
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    statusDiv.innerHTML = 'Câmera pronta. Clique em "Falar Cor Alvo".';
-                    requestAnimationFrame(detectColorLoop);
-                };
-            } catch (err) {
-                statusDiv.innerHTML = 'Erro ao iniciar câmera: ' + err.message;
-                console.error("Erro ao iniciar a câmera: ", err);
-            }
-        }
-
-        function detectColorLoop() {
-            if (!video.srcObject || video.paused || video.ended || video.videoWidth === 0) {
-                requestAnimationFrame(detectColorLoop);
-                return;
-            }
-            try {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const pixelData = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
-                const detectedColorName = rgbToColorName(pixelData[0], pixelData[1], pixelData[2]);
-
-                if (detectedColorName && targetColor && detectedColorName === targetColor) {
-                    if (detectedColorName !== lastColorSent) {
-                        statusDiv.innerHTML = "Cor Encontrada: <b style='color:" + detectedColorName.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + detectedColorName.toUpperCase() + "</b>!";
-                        lastColorSent = detectedColorName;
-                        speak(detectedColorName);
-                    }
-                    playBeep();
-                }
-            } catch (e) {
-                console.error("Erro no loop de detecção:", e);
-            }
-            requestAnimationFrame(detectColorLoop);
-        }
-
-        function handleTargetColorVoiceInput() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                statusDiv.innerHTML = "Erro: Reconhecimento de voz não suportado neste navegador.";
-                return;
-            }
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'pt-BR';
-            recognition.start();
-            statusDiv.innerHTML = "Ouvindo...";
-
-            recognition.onresult = (event) => {
-                let spokenText = event.results[0][0].transcript.toLowerCase().trim();
-                if (spokenText.includes("azul claro") || spokenText.includes("azul escuro")) spokenText = "azul";
-                if (spokenText.includes("verde claro") || spokenText.includes("verde escuro")) spokenText = "verde";
-
-                if (supportedColors.includes(spokenText)) {
-                    targetColor = spokenText;
-                    lastColorSent = "";
-                    statusDiv.innerHTML = "Procurando por: <b style='color:" + targetColor.replace(" ","") + "; text-shadow: 0 0 3px black, 0 0 3px black;'>" + targetColor.toUpperCase() + "</b>";
-                } else {
-                    targetColor = "";
-                    statusDiv.innerHTML = "Cor '" + spokenText + "' não suportada. Tente: " + supportedColors.slice(0, 5).join(", ") + "...";
-                }
-            };
-
-            recognition.onerror = (event) => {
-                statusDiv.innerHTML = "Erro no reconhecimento de voz: " + event.error;
-                if (event.error === 'no-speech') {
-                    statusDiv.innerHTML = "Nenhuma fala detectada. Clique para tentar de novo.";
-                } else if (event.error === 'not-allowed') {
-                    statusDiv.innerHTML = "Permissão para microfone negada. Verifique as configurações do navegador.";
-                }
-            };
-
-            recognition.onspeechend = () => {
-                recognition.stop();
-            };
-        }
-
-        startCamera();
-    </script>
+    startCamera();
+  </script>
 </body>
 </html>
